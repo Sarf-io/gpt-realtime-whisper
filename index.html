@@ -354,9 +354,9 @@
       <h3>Model &amp; language</h3>
       <label for="model">Model</label>
       <select id="model">
-        <option value="gpt-realtime-whisper" selected>gpt-realtime-whisper</option>
-        <option value="gpt-4o-transcribe">gpt-4o-transcribe</option>
-        <option value="gpt-4o-mini-transcribe">gpt-4o-mini-transcribe</option>
+        <option value="gpt-realtime-whisper" selected>gpt-realtime-whisper · fastest, lower formatting quality</option>
+        <option value="gpt-4o-mini-transcribe">gpt-4o-mini-transcribe · balanced, good casing & punctuation</option>
+        <option value="gpt-4o-transcribe">gpt-4o-transcribe · highest accuracy, slower</option>
       </select>
 
       <label for="lang">Language hint</label>
@@ -654,28 +654,52 @@ function handleEvent(evt) {
   }
 }
 
+function isLegacyTranscribeModel(m) {
+  // The gpt-4o transcribe family and whisper-1 use the older flat
+  // transcription_session shape; gpt-realtime-whisper uses the new GA shape.
+  return m === 'gpt-4o-transcribe' || m === 'gpt-4o-mini-transcribe' || m === 'whisper-1';
+}
+
 function buildSessionConfig() {
-  const transcription = { model: modelEl.value };
+  const model = modelEl.value;
+  const transcription = { model };
   if (langEl.value) transcription.language = langEl.value;
   if (promptEl.value.trim()) transcription.prompt = promptEl.value.trim();
 
-  const input = {
-    format: { type: 'audio/pcm', rate: 24000 },
-    transcription,
-    turn_detection: null
-  };
-  if (noiseEl.value) {
-    input.noise_reduction = { type: noiseEl.value };
+  if (isLegacyTranscribeModel(model)) {
+    // LEGACY (flat) shape — gpt-4o-transcribe, gpt-4o-mini-transcribe
+    const session = {
+      type: 'transcription',
+      input_audio_format: 'pcm16',
+      input_audio_transcription: transcription,
+      turn_detection: null
+    };
+    if (noiseEl.value) {
+      session.input_audio_noise_reduction = { type: noiseEl.value };
+    }
+    if (logprobsEl.checked) {
+      session.include = ['item.input_audio_transcription.logprobs'];
+    }
+    return session;
+  } else {
+    // NEW (nested) shape — gpt-realtime-whisper
+    const input = {
+      format: { type: 'audio/pcm', rate: 24000 },
+      transcription,
+      turn_detection: null
+    };
+    if (noiseEl.value) {
+      input.noise_reduction = { type: noiseEl.value };
+    }
+    const session = {
+      type: 'transcription',
+      audio: { input }
+    };
+    if (logprobsEl.checked) {
+      session.include = ['item.input_audio_transcription.logprobs'];
+    }
+    return session;
   }
-
-  const session = {
-    type: 'transcription',
-    audio: { input }
-  };
-  if (logprobsEl.checked) {
-    session.include = ['item.input_audio_transcription.logprobs'];
-  }
-  return session;
 }
 
 async function start() {
@@ -748,9 +772,12 @@ async function start() {
     await pc.setLocalDescription(offer);
 
     setStatus('handshaking with openai…');
+    const sessionCfg = buildSessionConfig();
+    const shape = isLegacyTranscribeModel(modelEl.value) ? 'legacy/flat (pcm16)' : 'GA/nested (audio.input.*)';
+    log(`session shape: ${shape} for ${modelEl.value}`);
     const fd = new FormData();
     fd.set('sdp', offer.sdp);
-    fd.set('session', JSON.stringify(buildSessionConfig()));
+    fd.set('session', JSON.stringify(sessionCfg));
 
     const resp = await fetch('https://api.openai.com/v1/realtime/calls', {
       method:'POST',
