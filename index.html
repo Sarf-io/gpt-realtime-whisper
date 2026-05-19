@@ -125,6 +125,9 @@
     content: "Press Start to begin. Speak as long as you like — pauses are fine. Press End to finalise.";
     color: var(--mute); font-style: italic; font-size: 16px;
   }
+  #modeUpload .transcript:empty::before {
+    content: "Transcription will appear here once it's ready.";
+  }
   .seg.partial { color: var(--mute); font-style: italic; }
   .seg.final { color: var(--ink); }
 
@@ -282,14 +285,179 @@
     color: var(--ok);
     letter-spacing: 0.05em;
   }
+
+  /* Tabs */
+  .tabs {
+    display: flex; gap: 0;
+    border-bottom: 1px solid var(--line);
+    margin: 0;
+  }
+  .tab {
+    padding: 14px 22px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--mute);
+    font-family: inherit;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all .15s;
+    font-weight: 500;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .mode { display: none; }
+  .mode.active { display: block; }
+
+  /* Upload zone */
+  .drop-zone {
+    border: 2px dashed var(--line);
+    border-radius: 4px;
+    padding: 40px 24px;
+    text-align: center;
+    background: var(--panel);
+    transition: all .15s;
+    cursor: pointer;
+    margin-bottom: 18px;
+  }
+  .drop-zone:hover, .drop-zone.dragging {
+    border-color: var(--accent);
+    background: rgba(200,255,79,0.04);
+  }
+  .drop-zone .icon {
+    width: 44px; height: 44px;
+    margin: 0 auto 14px;
+    color: var(--mute);
+  }
+  .drop-zone:hover .icon, .drop-zone.dragging .icon { color: var(--accent); }
+  .drop-zone .label {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    color: var(--ink);
+    margin-bottom: 6px;
+  }
+  .drop-zone .formats {
+    font-size: 11px;
+    color: var(--mute);
+    margin-top: 8px;
+  }
+  .drop-zone input[type=file] { display: none; }
+
+  .file-card {
+    display: none;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+    align-items: center;
+    gap: 14px;
+  }
+  .file-card.shown { display: flex; }
+  .file-card .file-icon {
+    width: 32px; height: 32px;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+  .file-card .file-info { flex: 1; min-width: 0; }
+  .file-card .file-name {
+    font-size: 13px; color: var(--ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .file-card .file-meta {
+    font-size: 11px; color: var(--mute); margin-top: 3px;
+  }
+  .file-card .remove-file {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--mute);
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    border-radius: 2px;
+  }
+  .file-card .remove-file:hover { color: var(--warn); border-color: var(--warn); }
+
+  /* Timing card */
+  .timing-card {
+    display: none;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 14px 16px;
+    margin-top: 14px;
+  }
+  .timing-card.shown { display: block; }
+  .timing-card h4 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.18em;
+    color: var(--mute); margin: 0 0 10px; font-weight: 500;
+  }
+  .timing-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 14px;
+  }
+  .timing-cell { }
+  .timing-cell .val {
+    font-family: 'Fraunces', serif;
+    font-size: 22px;
+    color: var(--ink);
+    line-height: 1.1;
+  }
+  .timing-cell .lbl {
+    font-size: 10px;
+    color: var(--mute);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 4px;
+  }
+
+  /* Progress bar for upload */
+  .progress-wrap {
+    display: none;
+    margin-bottom: 14px;
+  }
+  .progress-wrap.shown { display: block; }
+  .progress-bar {
+    height: 6px;
+    background: #0a0b09;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .progress-bar > div {
+    height: 100%;
+    background: linear-gradient(90deg, var(--ok), var(--accent));
+    width: 0%;
+    transition: width .2s;
+  }
+  .progress-label {
+    font-size: 11px;
+    color: var(--mute);
+    margin-top: 6px;
+    display: flex; justify-content: space-between;
+  }
 </style>
 </head>
 <body>
 
 <header>
-  <h1><span class="dot"></span>gpt-realtime-whisper</h1>
-  <div class="meta">always-on · manual end · pauses ok</div>
+  <h1><span class="dot"></span>openai transcription sandbox</h1>
+  <div class="meta">realtime dictation · file upload · model comparison</div>
 </header>
+
+<div class="tabs">
+  <button class="tab active" data-mode="realtime" id="tabRealtime">Realtime dictation</button>
+  <button class="tab" data-mode="upload" id="tabUpload">Upload file</button>
+</div>
+
+<!-- REALTIME MODE -->
+<div class="mode active" id="modeRealtime">
 
 <!-- TOP: transcript and controls -->
 <div class="top">
@@ -420,7 +588,161 @@
   </div>
   <div class="log" id="log"></div>
 </div>
+</div><!-- /modeRealtime -->
 
+<!-- UPLOAD MODE -->
+<div class="mode" id="modeUpload">
+  <div class="top">
+    <div class="status-bar" id="uStatus">
+      <span class="pulse"></span>
+      <span id="uStatusText">drop an audio file to begin</span>
+    </div>
+
+    <div class="drop-zone" id="dropZone">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="17 8 12 3 7 8"></polyline>
+        <line x1="12" y1="3" x2="12" y2="15"></line>
+      </svg>
+      <div class="label">Tap to pick an audio file</div>
+      <div class="formats">or drag &amp; drop · mp3, m4a, wav, webm, mp4, mpeg, mpga, flac, ogg · max 25 MB</div>
+      <input type="file" id="fileInput" accept="audio/*,.mp3,.m4a,.wav,.webm,.mp4,.mpeg,.mpga,.flac,.ogg" />
+    </div>
+
+    <div class="file-card" id="fileCard">
+      <svg class="file-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 18V5l12-2v13"></path>
+        <circle cx="6" cy="18" r="3"></circle>
+        <circle cx="18" cy="16" r="3"></circle>
+      </svg>
+      <div class="file-info">
+        <div class="file-name" id="fileName"></div>
+        <div class="file-meta" id="fileMeta"></div>
+      </div>
+      <button class="remove-file" id="removeFile" title="Remove file">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-bar"><div id="progressBar"></div></div>
+      <div class="progress-label">
+        <span id="progressText">uploading…</span>
+        <span id="progressPct">0%</span>
+      </div>
+    </div>
+
+    <div class="big-actions">
+      <button id="transcribeBtn" class="start" disabled>Transcribe</button>
+      <button id="cancelUploadBtn" class="cancel" disabled>Cancel</button>
+    </div>
+
+    <div class="transcript-wrap">
+      <div class="icon-bar">
+        <button class="icon-btn" id="uCopyBtn" title="Copy transcript" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+        </button>
+        <button class="icon-btn" id="uDownloadBtn" title="Download as .txt" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+        </button>
+        <button class="icon-btn" id="uClearBtn" title="Clear transcript" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+            <path d="M10 11v6M14 11v6"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="transcript" id="uTranscript"></div>
+    </div>
+
+    <div class="timing-card" id="timingCard">
+      <h4>Timing</h4>
+      <div class="timing-grid">
+        <div class="timing-cell"><div class="val" id="tFileSize">—</div><div class="lbl">file size</div></div>
+        <div class="timing-cell"><div class="val" id="tUploadTime">—</div><div class="lbl">upload</div></div>
+        <div class="timing-cell"><div class="val" id="tServerTime">—</div><div class="lbl">processing</div></div>
+        <div class="timing-cell"><div class="val" id="tTotalTime">—</div><div class="lbl">total</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <div class="config-grid">
+      <legend>Configuration</legend>
+
+      <div class="config-section">
+        <h3>Model</h3>
+        <label for="uModel">Transcription model</label>
+        <select id="uModel">
+          <option value="gpt-4o-transcribe" selected>gpt-4o-transcribe · best quality</option>
+          <option value="gpt-4o-mini-transcribe">gpt-4o-mini-transcribe · faster, cheaper, near-equal quality</option>
+          <option value="whisper-1">whisper-1 · older, supports timestamps &amp; subtitles</option>
+        </select>
+
+        <label for="uLang">Language hint</label>
+        <select id="uLang">
+          <option value="">auto-detect</option>
+          <option value="en" selected>en</option>
+          <option value="fr">fr</option>
+          <option value="de">de</option>
+          <option value="es">es</option>
+          <option value="it">it</option>
+          <option value="ur">ur</option>
+          <option value="hi">hi</option>
+          <option value="ar">ar</option>
+          <option value="pt">pt</option>
+          <option value="zh">zh</option>
+          <option value="ja">ja</option>
+        </select>
+      </div>
+
+      <div class="config-section">
+        <h3>Output</h3>
+        <label for="uFormat">Response format</label>
+        <select id="uFormat">
+          <option value="json" selected>plain text (json)</option>
+          <option value="text">plain text</option>
+          <option value="verbose_json">verbose json (whisper-1 only — segments &amp; timestamps)</option>
+          <option value="srt">SRT subtitle (whisper-1 only)</option>
+          <option value="vtt">VTT subtitle (whisper-1 only)</option>
+        </select>
+
+        <label for="uPrompt">Keywords / prompt (optional)</label>
+        <input id="uPrompt" type="text" placeholder="metoprolol, atorvastatin, Sigma, Lexon" />
+
+        <div class="check-row">
+          <input type="checkbox" id="uTemperature" />
+          <label for="uTemperature">Lower temperature (more deterministic)</label>
+        </div>
+        <div class="desc">Off = normal; on sets temperature to 0 for the most consistent output.</div>
+      </div>
+    </div>
+
+    <div class="note">
+      Files are sent directly to OpenAI for transcription. Your audio doesn't pass through any other server.
+    </div>
+
+    <div class="panel-h">
+      Event log
+      <span style="display: inline-flex; gap: 6px;">
+        <button class="tiny" id="uCopyLog" type="button">copy</button>
+        <button class="tiny" id="uClearLog" type="button">clear</button>
+      </span>
+    </div>
+    <div class="log" id="uLog"></div>
+  </div>
+</div><!-- /modeUpload -->
 <script>
 const $ = (id) => document.getElementById(id);
 const keyEl=$('key'), modelEl=$('model'), langEl=$('lang'), promptEl=$('prompt');
@@ -878,6 +1200,304 @@ document.addEventListener('keydown', (e) => {
 });
 
 setStatus('idle');
+
+/* ===========================================================
+   UPLOAD MODE
+   =========================================================== */
+
+const tabRealtime = $('tabRealtime'), tabUpload = $('tabUpload');
+const modeRealtime = $('modeRealtime'), modeUpload = $('modeUpload');
+
+function switchTab(mode) {
+  if (mode === 'realtime') {
+    tabRealtime.classList.add('active'); tabUpload.classList.remove('active');
+    modeRealtime.classList.add('active'); modeUpload.classList.remove('active');
+  } else {
+    tabUpload.classList.add('active'); tabRealtime.classList.remove('active');
+    modeUpload.classList.add('active'); modeRealtime.classList.remove('active');
+  }
+}
+tabRealtime.addEventListener('click', () => switchTab('realtime'));
+tabUpload.addEventListener('click', () => switchTab('upload'));
+
+// upload DOM refs
+const dropZone = $('dropZone'), fileInput = $('fileInput');
+const fileCard = $('fileCard'), fileName = $('fileName'), fileMeta = $('fileMeta'), removeFile = $('removeFile');
+const transcribeBtn = $('transcribeBtn'), cancelUploadBtn = $('cancelUploadBtn');
+const uTranscriptEl = $('uTranscript');
+const uCopyBtn = $('uCopyBtn'), uDownloadBtn = $('uDownloadBtn'), uClearBtn = $('uClearBtn');
+const uStatus = $('uStatus'), uStatusText = $('uStatusText');
+const uModelEl = $('uModel'), uLangEl = $('uLang'), uFormatEl = $('uFormat'), uPromptEl = $('uPrompt'), uTempEl = $('uTemperature');
+const uLogEl = $('uLog'), uCopyLog = $('uCopyLog'), uClearLog = $('uClearLog');
+const progressWrap = $('progressWrap'), progressBar = $('progressBar'), progressText = $('progressText'), progressPct = $('progressPct');
+const timingCard = $('timingCard');
+const tFileSize = $('tFileSize'), tUploadTime = $('tUploadTime'), tServerTime = $('tServerTime'), tTotalTime = $('tTotalTime');
+
+let selectedFile = null;
+let currentXhr = null;
+let uTranscriptText = '';
+
+function uSetStatus(text, kind) {
+  uStatusText.textContent = text;
+  uStatus.classList.remove('live','error','processing');
+  if (kind) uStatus.classList.add(kind);
+}
+function uLog(msg, kind='') {
+  const div = document.createElement('div');
+  div.className = 'ev ' + kind;
+  const ts = new Date().toLocaleTimeString('en-GB',{hour12:false});
+  div.innerHTML = `<span class="t">${ts}</span>${escapeHtml(msg)}`;
+  uLogEl.appendChild(div);
+  uLogEl.scrollTop = uLogEl.scrollHeight;
+}
+
+function formatBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
+  return (b/1024/1024).toFixed(2) + ' MB';
+}
+function formatMs(ms) {
+  if (ms < 1000) return Math.round(ms) + ' ms';
+  return (ms/1000).toFixed(2) + ' s';
+}
+
+function selectFile(file) {
+  if (!file) return;
+
+  // 25 MB hard limit
+  const MAX = 25 * 1024 * 1024;
+  if (file.size > MAX) {
+    uLog(`file too large: ${formatBytes(file.size)} (max 25 MB)`, 'err');
+    uSetStatus('file too large','error');
+    return;
+  }
+
+  selectedFile = file;
+  fileName.textContent = file.name;
+  fileMeta.textContent = `${formatBytes(file.size)} · ${file.type || 'audio'}`;
+  fileCard.classList.add('shown');
+  transcribeBtn.disabled = false;
+  uSetStatus('ready to transcribe');
+  uLog(`selected: ${file.name} (${formatBytes(file.size)})`, 'ok');
+}
+
+function clearFile() {
+  selectedFile = null;
+  fileInput.value = '';
+  fileCard.classList.remove('shown');
+  transcribeBtn.disabled = true;
+  uSetStatus('drop an audio file to begin');
+}
+
+// Drop zone interactions
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', (e) => selectFile(e.target.files[0]));
+removeFile.addEventListener('click', clearFile);
+
+['dragenter','dragover'].forEach(ev => dropZone.addEventListener(ev, (e) => {
+  e.preventDefault(); e.stopPropagation();
+  dropZone.classList.add('dragging');
+}));
+['dragleave','drop'].forEach(ev => dropZone.addEventListener(ev, (e) => {
+  e.preventDefault(); e.stopPropagation();
+  dropZone.classList.remove('dragging');
+}));
+dropZone.addEventListener('drop', (e) => {
+  const f = e.dataTransfer.files[0];
+  if (f) selectFile(f);
+});
+
+function uRenderTranscript() {
+  uTranscriptEl.textContent = uTranscriptText;
+  const has = !!uTranscriptText;
+  uCopyBtn.disabled = !has;
+  uDownloadBtn.disabled = !has;
+  uClearBtn.disabled = !has;
+}
+
+async function transcribe() {
+  const apiKey = keyEl.value.trim();
+  if (!apiKey) { alert('Paste your OpenAI API key in the Realtime tab first.'); return; }
+  if (!selectedFile) return;
+
+  const model = uModelEl.value;
+  const lang = uLangEl.value;
+  const fmt = uFormatEl.value;
+  const prompt = uPromptEl.value.trim();
+  const lowTemp = uTempEl.checked;
+
+  // Format validation for non-whisper models
+  const isWhisper = model === 'whisper-1';
+  if (!isWhisper && (fmt === 'verbose_json' || fmt === 'srt' || fmt === 'vtt')) {
+    uLog(`format "${fmt}" is only supported by whisper-1 — falling back to json`, 'err');
+  }
+  const effectiveFmt = (!isWhisper && (fmt === 'verbose_json' || fmt === 'srt' || fmt === 'vtt')) ? 'json' : fmt;
+
+  uTranscriptText = '';
+  uRenderTranscript();
+  timingCard.classList.remove('shown');
+
+  transcribeBtn.disabled = true;
+  cancelUploadBtn.disabled = false;
+  progressWrap.classList.add('shown');
+  progressBar.style.width = '0%';
+  progressPct.textContent = '0%';
+  progressText.textContent = 'uploading…';
+  uSetStatus('uploading audio…','processing');
+
+  uLog(`transcribing ${selectedFile.name} with ${model}` + (lang ? ` (${lang})` : ''));
+
+  const fd = new FormData();
+  fd.append('file', selectedFile);
+  fd.append('model', model);
+  fd.append('response_format', effectiveFmt);
+  if (lang) fd.append('language', lang);
+  if (prompt) fd.append('prompt', prompt);
+  if (lowTemp) fd.append('temperature', '0');
+
+  const tStart = performance.now();
+  let tUploadEnd = null;
+
+  const xhr = new XMLHttpRequest();
+  currentXhr = xhr;
+
+  xhr.upload.addEventListener('progress', (e) => {
+    if (e.lengthComputable) {
+      const pct = Math.round((e.loaded / e.total) * 100);
+      progressBar.style.width = pct + '%';
+      progressPct.textContent = pct + '%';
+      if (pct >= 100) {
+        progressText.textContent = 'processing on server…';
+        if (tUploadEnd === null) tUploadEnd = performance.now();
+        uSetStatus('processing on openai…','processing');
+      }
+    }
+  });
+
+  xhr.addEventListener('load', () => {
+    const tEnd = performance.now();
+    if (tUploadEnd === null) tUploadEnd = tEnd;
+    currentXhr = null;
+    progressWrap.classList.remove('shown');
+    cancelUploadBtn.disabled = true;
+
+    if (xhr.status >= 200 && xhr.status < 300) {
+      // success — parse based on format
+      let textOut = '';
+      try {
+        if (effectiveFmt === 'json' || effectiveFmt === 'verbose_json') {
+          const obj = JSON.parse(xhr.responseText);
+          textOut = obj.text || JSON.stringify(obj, null, 2);
+        } else {
+          // text / srt / vtt are plain strings
+          textOut = xhr.responseText;
+        }
+      } catch (e) {
+        textOut = xhr.responseText;
+      }
+      uTranscriptText = textOut;
+      uRenderTranscript();
+
+      // timing
+      tFileSize.textContent = formatBytes(selectedFile.size);
+      tUploadTime.textContent = formatMs(tUploadEnd - tStart);
+      tServerTime.textContent = formatMs(tEnd - tUploadEnd);
+      tTotalTime.textContent = formatMs(tEnd - tStart);
+      timingCard.classList.add('shown');
+
+      uSetStatus('done','live');
+      uLog(`✓ transcribed in ${formatMs(tEnd - tStart)} (upload ${formatMs(tUploadEnd - tStart)}, server ${formatMs(tEnd - tUploadEnd)})`, 'ok');
+    } else {
+      uSetStatus(`failed (${xhr.status})`,'error');
+      uLog(`HTTP ${xhr.status}: ${xhr.responseText}`, 'err');
+    }
+    transcribeBtn.disabled = false;
+  });
+
+  xhr.addEventListener('error', () => {
+    currentXhr = null;
+    progressWrap.classList.remove('shown');
+    cancelUploadBtn.disabled = true;
+    transcribeBtn.disabled = false;
+    uSetStatus('network error','error');
+    uLog('network error during upload', 'err');
+  });
+
+  xhr.addEventListener('abort', () => {
+    currentXhr = null;
+    progressWrap.classList.remove('shown');
+    cancelUploadBtn.disabled = true;
+    transcribeBtn.disabled = false;
+    uSetStatus('cancelled');
+    uLog('upload cancelled', 'err');
+  });
+
+  xhr.open('POST', 'https://api.openai.com/v1/audio/transcriptions');
+  xhr.setRequestHeader('Authorization', 'Bearer ' + apiKey);
+  xhr.send(fd);
+}
+
+function cancelUpload() {
+  if (currentXhr) {
+    currentXhr.abort();
+  }
+}
+
+transcribeBtn.addEventListener('click', transcribe);
+cancelUploadBtn.addEventListener('click', cancelUpload);
+
+uCopyBtn.addEventListener('click', () => {
+  if (!uTranscriptText) return;
+  navigator.clipboard.writeText(uTranscriptText).then(() => {
+    uCopyBtn.classList.add('copied');
+    setTimeout(() => uCopyBtn.classList.remove('copied'), 1400);
+    uLog('transcript copied to clipboard','ok');
+  });
+});
+
+uDownloadBtn.addEventListener('click', () => {
+  if (!uTranscriptText) return;
+  // Pick extension based on selected format
+  const fmt = uFormatEl.value;
+  let ext = 'txt';
+  let mime = 'text/plain';
+  if (fmt === 'srt') { ext = 'srt'; mime = 'application/x-subrip'; }
+  else if (fmt === 'vtt') { ext = 'vtt'; mime = 'text/vtt'; }
+  else if (fmt === 'verbose_json') { ext = 'json'; mime = 'application/json'; }
+
+  const baseName = selectedFile ? selectedFile.name.replace(/\.[^.]+$/, '') : 'transcript';
+  const fileName = `${baseName}.${ext}`;
+  const blob = new Blob([uTranscriptText], { type: mime + ';charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  uLog(`downloaded ${fileName}`, 'ok');
+});
+
+uClearBtn.addEventListener('click', () => {
+  uTranscriptText = '';
+  uRenderTranscript();
+  timingCard.classList.remove('shown');
+});
+
+uClearLog.addEventListener('click', () => { uLogEl.innerHTML=''; });
+uCopyLog.addEventListener('click', () => {
+  const lines = Array.from(uLogEl.querySelectorAll('.ev')).map(el => el.innerText.trim());
+  if (!lines.length) return;
+  navigator.clipboard.writeText(lines.join('\n')).then(() => {
+    const orig = uCopyLog.textContent;
+    uCopyLog.textContent = 'copied!';
+    setTimeout(() => { uCopyLog.textContent = orig; }, 1400);
+  });
+});
+
+// Show empty state on transcript
+uRenderTranscript();
 </script>
 </body>
 </html>
