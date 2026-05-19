@@ -413,7 +413,10 @@
 
   <div class="panel-h">
     Event log
-    <button class="tiny" id="clearLog" type="button">clear</button>
+    <span style="display: inline-flex; gap: 6px;">
+      <button class="tiny" id="copyLog" type="button">copy</button>
+      <button class="tiny" id="clearLog" type="button">clear</button>
+    </span>
   </div>
   <div class="log" id="log"></div>
 </div>
@@ -423,7 +426,7 @@ const $ = (id) => document.getElementById(id);
 const keyEl=$('key'), modelEl=$('model'), langEl=$('lang'), promptEl=$('prompt');
 const noiseEl=$('noise'), logprobsEl=$('logprobs'), keepAliveEl=$('keepAlive');
 const startBtn=$('start'), endBtn=$('end'), cancelBtn=$('cancel');
-const copyBtn=$('copyBtn'), clearBtn=$('clearBtn'), clearLogBtn=$('clearLog'), clearKeyBtn=$('clearKey');
+const copyBtn=$('copyBtn'), clearBtn=$('clearBtn'), clearLogBtn=$('clearLog'), copyLogBtn=$('copyLog'), clearKeyBtn=$('clearKey');
 const transcriptEl=$('transcript'), logEl=$('log');
 const statusEl=$('status'), statusText=$('statusText'), timerEl=$('timer'), meterBar=$('meterBar');
 const confLegendEl=$('confLegend'), confSummaryEl=$('confSummary');
@@ -654,52 +657,31 @@ function handleEvent(evt) {
   }
 }
 
-function isLegacyTranscribeModel(m) {
-  // The gpt-4o transcribe family and whisper-1 use the older flat
-  // transcription_session shape; gpt-realtime-whisper uses the new GA shape.
-  return m === 'gpt-4o-transcribe' || m === 'gpt-4o-mini-transcribe' || m === 'whisper-1';
-}
-
 function buildSessionConfig() {
   const model = modelEl.value;
   const transcription = { model };
   if (langEl.value) transcription.language = langEl.value;
   if (promptEl.value.trim()) transcription.prompt = promptEl.value.trim();
 
-  if (isLegacyTranscribeModel(model)) {
-    // LEGACY (flat) shape — gpt-4o-transcribe, gpt-4o-mini-transcribe
-    const session = {
-      type: 'transcription',
-      input_audio_format: 'pcm16',
-      input_audio_transcription: transcription,
-      turn_detection: null
-    };
-    if (noiseEl.value) {
-      session.input_audio_noise_reduction = { type: noiseEl.value };
-    }
-    if (logprobsEl.checked) {
-      session.include = ['item.input_audio_transcription.logprobs'];
-    }
-    return session;
-  } else {
-    // NEW (nested) shape — gpt-realtime-whisper
-    const input = {
-      format: { type: 'audio/pcm', rate: 24000 },
-      transcription,
-      turn_detection: null
-    };
-    if (noiseEl.value) {
-      input.noise_reduction = { type: noiseEl.value };
-    }
-    const session = {
-      type: 'transcription',
-      audio: { input }
-    };
-    if (logprobsEl.checked) {
-      session.include = ['item.input_audio_transcription.logprobs'];
-    }
-    return session;
+  // The GA /v1/realtime/calls endpoint requires the new nested shape
+  // for ALL transcription models — the older flat shape (input_audio_format
+  // at the session root) was rejected with "Unknown parameter" errors.
+  const input = {
+    format: { type: 'audio/pcm', rate: 24000 },
+    transcription,
+    turn_detection: null
+  };
+  if (noiseEl.value) {
+    input.noise_reduction = { type: noiseEl.value };
   }
+  const session = {
+    type: 'transcription',
+    audio: { input }
+  };
+  if (logprobsEl.checked) {
+    session.include = ['item.input_audio_transcription.logprobs'];
+  }
+  return session;
 }
 
 async function start() {
@@ -773,8 +755,7 @@ async function start() {
 
     setStatus('handshaking with openai…');
     const sessionCfg = buildSessionConfig();
-    const shape = isLegacyTranscribeModel(modelEl.value) ? 'legacy/flat (pcm16)' : 'GA/nested (audio.input.*)';
-    log(`session shape: ${shape} for ${modelEl.value}`);
+    log('session config: ' + JSON.stringify(sessionCfg));
     const fd = new FormData();
     fd.set('sdp', offer.sdp);
     fd.set('session', JSON.stringify(sessionCfg));
@@ -869,6 +850,24 @@ clearBtn.addEventListener('click', () => {
   timerEl.textContent='';
 });
 clearLogBtn.addEventListener('click', () => { logEl.innerHTML=''; });
+copyLogBtn.addEventListener('click', () => {
+  // Grab the visible text of every log entry
+  const lines = Array.from(logEl.querySelectorAll('.ev')).map(el => el.innerText.trim());
+  if (!lines.length) { return; }
+  const text = lines.join('\n');
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = copyLogBtn.textContent;
+    copyLogBtn.textContent = 'copied!';
+    setTimeout(() => { copyLogBtn.textContent = orig; }, 1400);
+  }).catch(err => {
+    // fallback: select the log area so the user can copy manually
+    const range = document.createRange();
+    range.selectNodeContents(logEl);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  });
+});
 
 document.addEventListener('keydown', (e) => {
   const tag = e.target.tagName;
