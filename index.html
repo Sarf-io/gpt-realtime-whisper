@@ -74,6 +74,21 @@
     border-radius: 2px; outline: none; transition: border-color .15s;
   }
   input:focus, select:focus { border-color: var(--accent); }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* checkbox row */
+  .check-row {
+    display: flex; align-items: center; gap: 10px;
+    margin: 14px 0 4px;
+  }
+  .check-row input[type=checkbox] {
+    width: 16px; height: 16px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .check-row label { margin: 0; cursor: pointer; color: var(--ink); font-size: 13px; }
+  .check-row .desc { font-size: 11px; color: var(--mute); margin-top: 4px; margin-left: 26px; line-height: 1.4; }
+
   button {
     font-family: inherit; cursor: pointer; border: 1px solid var(--line);
     background: transparent; color: var(--ink); padding: 10px 14px;
@@ -142,6 +157,36 @@
   .seg.partial { color: var(--mute); font-style: italic; }
   .seg.final { color: var(--ink); }
 
+  /* Confidence highlighting via logprobs */
+  .tok { display: inline; }
+  .tok.lo {
+    text-decoration: underline wavy rgba(255,122,89,0.85);
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 4px;
+  }
+  .tok.mid {
+    text-decoration: underline dotted rgba(200,255,79,0.6);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 4px;
+  }
+  .tok[data-lp]:hover {
+    background: rgba(255,122,89,0.08);
+    cursor: help;
+  }
+
+  .conf-legend {
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--mute);
+    display: flex; gap: 14px; flex-wrap: wrap;
+  }
+  .conf-legend .sw { display: inline-flex; align-items: center; gap: 6px; }
+  .conf-legend .sample.lo { text-decoration: underline wavy rgba(255,122,89,0.85); text-decoration-thickness: 1.5px; text-underline-offset: 3px; color: var(--ink); }
+  .conf-legend .sample.mid { text-decoration: underline dotted rgba(200,255,79,0.6); text-underline-offset: 3px; color: var(--ink); }
+  .conf-summary {
+    font-size: 11px; color: var(--mute); margin-top: 8px;
+  }
+
   .panel-h {
     font-size: 11px; text-transform: uppercase; letter-spacing: 0.18em;
     color: var(--mute); margin: 22px 0 10px;
@@ -204,24 +249,42 @@
         <option value="gpt-4o-mini-transcribe">gpt-4o-mini-transcribe</option>
       </select>
 
-      <label for="lang">Language hint</label>
-      <select id="lang">
-        <option value="">auto</option>
-        <option value="en" selected>en</option>
-        <option value="fr">fr</option>
-        <option value="de">de</option>
-        <option value="es">es</option>
-        <option value="it">it</option>
-        <option value="ur">ur</option>
-        <option value="hi">hi</option>
-        <option value="ar">ar</option>
-        <option value="pt">pt</option>
-        <option value="zh">zh</option>
-        <option value="ja">ja</option>
-      </select>
+      <div class="row">
+        <div>
+          <label for="lang">Language hint</label>
+          <select id="lang">
+            <option value="">auto</option>
+            <option value="en" selected>en</option>
+            <option value="fr">fr</option>
+            <option value="de">de</option>
+            <option value="es">es</option>
+            <option value="it">it</option>
+            <option value="ur">ur</option>
+            <option value="hi">hi</option>
+            <option value="ar">ar</option>
+            <option value="pt">pt</option>
+            <option value="zh">zh</option>
+            <option value="ja">ja</option>
+          </select>
+        </div>
+        <div>
+          <label for="noise">Noise reduction</label>
+          <select id="noise">
+            <option value="" selected>off</option>
+            <option value="near_field">near field (phone, headset)</option>
+            <option value="far_field">far field (room, speakerphone)</option>
+          </select>
+        </div>
+      </div>
 
       <label for="prompt">Keywords / prompt (optional)</label>
       <input id="prompt" type="text" placeholder="e.g. metoprolol, atorvastatin, Sigma, Lexon" />
+
+      <div class="check-row">
+        <input type="checkbox" id="logprobs" checked />
+        <label for="logprobs">Show confidence (logprobs)</label>
+      </div>
+      <div class="desc">Underlines words the model was less sure about. Hover/tap a word to see its confidence.</div>
     </fieldset>
 
     <div class="controls">
@@ -255,6 +318,12 @@
 
     <div class="transcript" id="transcript"></div>
 
+    <div class="conf-legend" id="confLegend" style="display:none;">
+      <span class="sw"><span class="sample mid">word</span> some uncertainty (lp &lt; -0.5)</span>
+      <span class="sw"><span class="sample lo">word</span> low confidence (lp &lt; -1.0)</span>
+    </div>
+    <div class="conf-summary" id="confSummary"></div>
+
     <div class="controls" style="margin-top: 14px;">
       <button id="copy" type="button">Copy final transcript</button>
       <button id="clearT" type="button">Clear</button>
@@ -265,10 +334,12 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const keyEl=$('key'), modelEl=$('model'), langEl=$('lang'), promptEl=$('prompt');
+const noiseEl=$('noise'), logprobsEl=$('logprobs');
 const startBtn=$('start'), endBtn=$('end'), cancelBtn=$('cancel');
 const copyBtn=$('copy'), clearTBtn=$('clearT'), clearLogBtn=$('clearLog'), clearKeyBtn=$('clearKey');
 const transcriptEl=$('transcript'), logEl=$('log');
 const statusEl=$('status'), statusText=$('statusText'), timerEl=$('timer'), meterBar=$('meterBar');
+const confLegendEl=$('confLegend'), confSummaryEl=$('confSummary');
 
 keyEl.value = localStorage.getItem('oa_key') || '';
 keyEl.addEventListener('change', () => localStorage.setItem('oa_key', keyEl.value.trim()));
@@ -278,8 +349,14 @@ let pc=null, dc=null, micStream=null;
 let audioCtx=null, analyser=null, meterRAF=null;
 let timerRAF=null, timerStart=0;
 let awaitingFinal=false;
-let partialText='', finalText='';
+let partialText='';
+let finalText='';
+let finalTokens=null;   // [{token, logprob}, ...] when logprobs were returned
 let finalTimeout=null;
+
+// thresholds for highlighting
+const LP_MID = -0.5;   // some uncertainty
+const LP_LO  = -1.0;   // genuinely uncertain — needs review
 
 function setStatus(text, kind) {
   statusText.textContent = text;
@@ -296,9 +373,41 @@ function log(msg, kind='') {
 }
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+function classForLp(lp) {
+  if (lp == null) return '';
+  if (lp < LP_LO) return 'lo';
+  if (lp < LP_MID) return 'mid';
+  return '';
+}
+
 function renderTranscript() {
   transcriptEl.innerHTML='';
-  if (finalText) {
+  confLegendEl.style.display = 'none';
+  confSummaryEl.textContent = '';
+
+  if (finalText && finalTokens && finalTokens.length) {
+    // render token-by-token with logprob classes
+    let loCount=0, midCount=0, total=0, sum=0;
+    for (const t of finalTokens) {
+      const span = document.createElement('span');
+      span.className = 'tok ' + classForLp(t.logprob);
+      if (t.logprob != null) {
+        span.dataset.lp = t.logprob.toFixed(2);
+        span.title = `logprob: ${t.logprob.toFixed(2)}`;
+        sum += t.logprob; total++;
+        if (t.logprob < LP_LO) loCount++;
+        else if (t.logprob < LP_MID) midCount++;
+      }
+      span.textContent = t.token;
+      transcriptEl.appendChild(span);
+    }
+    confLegendEl.style.display = 'flex';
+    if (total > 0) {
+      const avg = sum/total;
+      confSummaryEl.textContent =
+        `${total} tokens · avg logprob ${avg.toFixed(2)} · ${loCount} low-confidence · ${midCount} slightly uncertain`;
+    }
+  } else if (finalText) {
     const s=document.createElement('span'); s.className='seg final'; s.textContent=finalText;
     transcriptEl.appendChild(s);
   } else if (partialText) {
@@ -360,9 +469,18 @@ function handleEvent(evt) {
       break;
     case 'conversation.item.input_audio_transcription.completed':
       finalText = evt.transcript || partialText;
+      // logprobs come as an array of {token, logprob, bytes?} when include is set
+      if (Array.isArray(evt.logprobs) && evt.logprobs.length) {
+        finalTokens = evt.logprobs.map(l => ({
+          token: l.token,
+          logprob: typeof l.logprob === 'number' ? l.logprob : null
+        }));
+      } else {
+        finalTokens = null;
+      }
       partialText = '';
       renderTranscript();
-      log('✓ final transcript received','ok');
+      log('✓ final transcript received' + (finalTokens ? ` (${finalTokens.length} tokens w/ logprobs)` : ''),'ok');
       if (awaitingFinal) {
         awaitingFinal=false;
         if (finalTimeout) { clearTimeout(finalTimeout); finalTimeout=null; }
@@ -391,16 +509,23 @@ function buildSessionConfig() {
   if (langEl.value) transcription.language = langEl.value;
   if (promptEl.value.trim()) transcription.prompt = promptEl.value.trim();
 
-  return {
-    type: 'transcription',
-    audio: {
-      input: {
-        format: { type: 'audio/pcm', rate: 24000 },
-        transcription,
-        turn_detection: null  // manual commit only
-      }
-    }
+  const input = {
+    format: { type: 'audio/pcm', rate: 24000 },
+    transcription,
+    turn_detection: null  // manual commit only
   };
+  if (noiseEl.value) {
+    input.noise_reduction = { type: noiseEl.value };
+  }
+
+  const session = {
+    type: 'transcription',
+    audio: { input }
+  };
+  if (logprobsEl.checked) {
+    session.include = ['item.input_audio_transcription.logprobs'];
+  }
+  return session;
 }
 
 async function start() {
@@ -408,7 +533,7 @@ async function start() {
   if (!apiKey) { alert('Paste an OpenAI API key first.'); return; }
   localStorage.setItem('oa_key', apiKey);
 
-  partialText=''; finalText=''; awaitingFinal=false;
+  partialText=''; finalText=''; finalTokens=null; awaitingFinal=false;
   renderTranscript();
 
   startBtn.disabled=true;
@@ -526,7 +651,7 @@ copyBtn.addEventListener('click', () => {
   navigator.clipboard.writeText(text).then(() => log('transcript copied','ok'));
 });
 clearTBtn.addEventListener('click', () => {
-  finalText=''; partialText='';
+  finalText=''; partialText=''; finalTokens=null;
   renderTranscript();
   timerEl.textContent='';
 });
