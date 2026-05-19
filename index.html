@@ -179,7 +179,7 @@
 
 <header>
   <h1><span class="dot"></span>gpt-realtime-whisper · manual dictation</h1>
-  <div class="meta">no auto turn detection · you press end</div>
+  <div class="meta">GA api · no auto turn detection · you press end</div>
 </header>
 
 <main>
@@ -230,7 +230,7 @@
     <div class="hint">Shortcuts: <kbd>Space</kbd> start · <kbd>Enter</kbd> end · <kbd>Esc</kbd> cancel</div>
 
     <div class="note">
-      Your API key stays in this browser. Don't host this file publicly or commit it to git.
+      Your API key stays in this browser. Don't share this URL or commit it with a key embedded.
     </div>
 
     <div class="panel-h">
@@ -385,20 +385,19 @@ function handleEvent(evt) {
   }
 }
 
-function buildSessionUpdate() {
+// GA shape: this is sent as the "session" form field at SDP-exchange time
+function buildSessionConfig() {
   const transcription = { model: modelEl.value };
   if (langEl.value) transcription.language = langEl.value;
   if (promptEl.value.trim()) transcription.prompt = promptEl.value.trim();
+
   return {
-    type: 'session.update',
-    session: {
-      type: 'transcription',
-      audio: {
-        input: {
-          format: { type: 'audio/pcm', rate: 24000 },
-          transcription,
-          turn_detection: null
-        }
+    type: 'transcription',
+    audio: {
+      input: {
+        format: { type: 'audio/pcm', rate: 24000 },
+        transcription,
+        turn_detection: null  // manual commit only
       }
     }
   };
@@ -437,8 +436,6 @@ async function start() {
     dc = pc.createDataChannel('oai-events');
     dc.onopen = () => {
       log('data channel open','ok');
-      dc.send(JSON.stringify(buildSessionUpdate()));
-      log('→ session.update (turn_detection: null)');
       setStatus('listening — press End when done','live');
       startTimer();
       endBtn.disabled=false;
@@ -452,11 +449,16 @@ async function start() {
     await pc.setLocalDescription(offer);
 
     setStatus('handshaking with openai…');
-    const url = 'https://api.openai.com/v1/realtime?intent=transcription&model='+encodeURIComponent(modelEl.value);
-    const resp = await fetch(url, {
+
+    // GA endpoint: multipart/form-data with sdp + session fields
+    const fd = new FormData();
+    fd.set('sdp', offer.sdp);
+    fd.set('session', JSON.stringify(buildSessionConfig()));
+
+    const resp = await fetch('https://api.openai.com/v1/realtime/calls', {
       method:'POST',
-      headers:{ 'Authorization':'Bearer '+apiKey, 'Content-Type':'application/sdp', 'OpenAI-Beta':'realtime=v1' },
-      body: offer.sdp
+      headers:{ 'Authorization':'Bearer '+apiKey },
+      body: fd
     });
     if (!resp.ok) {
       const txt = await resp.text();
@@ -483,7 +485,6 @@ function endDictation() {
   stopTimer();
   endBtn.disabled=true;
   cancelBtn.disabled=true;
-  // Safety net: if no completion within 15s, fall back to partial
   finalTimeout = setTimeout(() => {
     if (awaitingFinal) {
       log('no completion event after 15s — using partial','err');
