@@ -610,7 +610,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6M14 11v6"></path></svg>
         </button>
       </div>
-      <div class="transcript" id="mTranscript" data-placeholder="Press Start. gpt-4o-mini-transcribe typically only emits the final transcript on commit, not partial deltas — that's normal."></div>
+      <div class="transcript" id="mTranscript" data-placeholder="Press Start. With server VAD on, transcription streams as you speak and auto-commits on pauses. Press End for the final fragment."></div>
     </div>
     <div class="conf-legend" id="mConfLegend" style="display:none;">
       <span class="sw"><span class="sample mid">word</span> some uncertainty</span>
@@ -654,6 +654,24 @@
 
         <label for="mPrompt">Keywords / prompt (optional)</label>
         <input id="mPrompt" type="text" placeholder="metoprolol, atorvastatin, Sigma, Lexon" />
+      </div>
+
+      <div class="config-section">
+        <h3>Turn detection</h3>
+        <label for="mVad">Mode</label>
+        <select id="mVad">
+          <option value="server_vad" selected>server VAD (streaming — auto-commit on silence)</option>
+          <option value="none">none (manual commit only, no streaming)</option>
+        </select>
+        <div class="desc">Per the docs, transcription only begins when the buffer commits. Server VAD auto-commits on pauses so you see live deltas as you speak.</div>
+
+        <label for="mVadSilence">Silence duration before commit (ms)</label>
+        <input id="mVadSilence" type="text" value="1500" inputmode="numeric" />
+        <div class="desc">How long the model waits in silence before auto-committing. 1500 ms = natural sentence pauses. Lower = more aggressive chunking.</div>
+
+        <label for="mVadThreshold">Voice threshold (0–1)</label>
+        <input id="mVadThreshold" type="text" value="0.5" inputmode="decimal" />
+        <div class="desc">How loud audio must be to register as speech. Lower picks up quieter speech but may trigger on background noise.</div>
       </div>
 
       <div class="config-section">
@@ -1075,16 +1093,16 @@ async function buildWebRTCSession({ apiKey, micStream, sessionConfig, onEvent, o
   return { pc, dc };
 }
 
-// Build the GA-nested session config (works for gpt-realtime-whisper over WebRTC,
-// and is the same shape that worked for gpt-4o-mini-transcribe over WebSocket).
-function buildSessionConfig({ model, language, prompt, noise, logprobs }) {
+// Build the GA-nested session config.
+// turnDetection: null disables auto-commit; an object enables server VAD or semantic VAD.
+function buildSessionConfig({ model, language, prompt, noise, logprobs, turnDetection }) {
   const transcription = { model };
   if (language) transcription.language = language;
   if (prompt) transcription.prompt = prompt;
   const input = {
     format: { type: 'audio/pcm', rate: 24000 },
     transcription,
-    turn_detection: null
+    turn_detection: turnDetection !== undefined ? turnDetection : null
   };
   if (noise) input.noise_reduction = { type: noise };
   const session = { type: 'transcription', audio: { input } };
@@ -1495,7 +1513,8 @@ function makeTranscript({ transcriptEl, copyBtn, downloadBtn, clearBtn, confLege
     startBtn: $('mStartBtn'), endBtn: $('mEndBtn'), cancelBtn: $('mCancelBtn'),
     urlEl: $('mUrl'), modelEl: $('mModel'),
     langEl: $('mLang'), noiseEl: $('mNoise'), promptEl: $('mPrompt'),
-    logprobsEl: $('mLogprobs'), keepAliveEl: $('mKeepAlive')
+    logprobsEl: $('mLogprobs'), keepAliveEl: $('mKeepAlive'),
+    vadEl: $('mVad'), vadSilenceEl: $('mVadSilence'), vadThresholdEl: $('mVadThreshold')
   };
 
   const log = makeLogger($('mLog'), $('mCopyLog'), $('mClearLog'));
@@ -1535,13 +1554,25 @@ function makeTranscript({ transcriptEl, copyBtn, downloadBtn, clearBtn, confLege
   function activeModel() {
     return (cfg.modelEl.value || '').trim() || D_MODEL;
   }
+  function buildTurnDetection() {
+    if (cfg.vadEl.value === 'none') return null;
+    const silence = parseInt(cfg.vadSilenceEl.value, 10);
+    const threshold = parseFloat(cfg.vadThresholdEl.value);
+    return {
+      type: 'server_vad',
+      threshold: isNaN(threshold) ? 0.5 : threshold,
+      prefix_padding_ms: 300,
+      silence_duration_ms: isNaN(silence) ? 1500 : silence
+    };
+  }
   function buildCfg() {
     return buildSessionConfig({
       model: activeModel(),
       language: cfg.langEl.value,
       prompt: cfg.promptEl.value.trim(),
       noise: cfg.noiseEl.value,
-      logprobs: cfg.logprobsEl.checked
+      logprobs: cfg.logprobsEl.checked,
+      turnDetection: buildTurnDetection()
     });
   }
 
@@ -2089,12 +2120,24 @@ function makeTranscript({ transcriptEl, copyBtn, downloadBtn, clearBtn, confLege
     });
   }
   function miniCfg() {
+    let turnDetection = null;
+    if ($('mVad').value !== 'none') {
+      const silence = parseInt($('mVadSilence').value, 10);
+      const threshold = parseFloat($('mVadThreshold').value);
+      turnDetection = {
+        type: 'server_vad',
+        threshold: isNaN(threshold) ? 0.5 : threshold,
+        prefix_padding_ms: 300,
+        silence_duration_ms: isNaN(silence) ? 1500 : silence
+      };
+    }
     return buildSessionConfig({
       model: ($('mModel').value || '').trim() || 'gpt-4o-mini-transcribe-2025-12-15',
       language: $('mLang').value,
       prompt: $('mPrompt').value.trim(),
       noise: $('mNoise').value,
-      logprobs: true
+      logprobs: true,
+      turnDetection
     });
   }
 
