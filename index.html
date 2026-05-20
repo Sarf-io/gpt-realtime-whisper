@@ -642,14 +642,24 @@
       <legend>Configuration · WebSocket transport</legend>
 
       <div class="config-section">
-        <h3>Model</h3>
-        <label for="wModel">Transcription model</label>
+        <h3>Endpoint &amp; model</h3>
+        <label for="wUrl">WebSocket URL</label>
+        <input id="wUrl" type="text" value="wss://api.openai.com/v1/realtime?intent=transcription" spellcheck="false" autocapitalize="off" autocomplete="off" />
+
+        <label for="wModelCustom">Model</label>
+        <input id="wModelCustom" type="text" value="gpt-4o-mini-transcribe-2025-12-15" spellcheck="false" autocapitalize="off" autocomplete="off" />
+
+        <label for="wModel">Quick presets</label>
         <select id="wModel">
-          <option value="gpt-4o-mini-transcribe" selected>gpt-4o-mini-transcribe</option>
+          <option value="">— pick a preset —</option>
+          <option value="gpt-4o-mini-transcribe-2025-12-15">gpt-4o-mini-transcribe-2025-12-15 (latest, recommended)</option>
+          <option value="gpt-4o-mini-transcribe">gpt-4o-mini-transcribe (alias to latest)</option>
+          <option value="gpt-4o-mini-transcribe-2025-03-20">gpt-4o-mini-transcribe-2025-03-20 (older)</option>
           <option value="gpt-4o-transcribe">gpt-4o-transcribe</option>
           <option value="whisper-1">whisper-1</option>
           <option value="gpt-realtime-whisper">gpt-realtime-whisper</option>
         </select>
+        <div class="desc">Picking a preset updates the model field above. You can also type any model ID manually.</div>
 
         <label for="wLang">Language hint</label>
         <select id="wLang">
@@ -1632,7 +1642,7 @@ const wStart = $('wStart'), wEnd = $('wEnd'), wCancel = $('wCancel');
 const wCopyBtn = $('wCopyBtn'), wDownloadBtn = $('wDownloadBtn'), wClearBtn = $('wClearBtn');
 const wTranscriptEl = $('wTranscript');
 const wStatus = $('wStatus'), wStatusText = $('wStatusText'), wTimer = $('wTimer'), wMeterBar = $('wMeterBar');
-const wModelEl = $('wModel'), wLangEl = $('wLang'), wNoiseEl = $('wNoise'), wPromptEl = $('wPrompt'), wLogprobsEl = $('wLogprobs'), wKeepAliveEl = $('wKeepAlive');
+const wModelEl = $('wModel'), wModelCustomEl = $('wModelCustom'), wUrlEl = $('wUrl'), wLangEl = $('wLang'), wNoiseEl = $('wNoise'), wPromptEl = $('wPrompt'), wLogprobsEl = $('wLogprobs'), wKeepAliveEl = $('wKeepAlive');
 const wLogEl = $('wLog'), wCopyLog = $('wCopyLog'), wClearLog = $('wClearLog');
 
 let wWs = null;             // WebSocket
@@ -1778,9 +1788,14 @@ function pcm16ToBase64(int16Array) {
   return btoa(binary);
 }
 
+// Get the active model: custom field is the source of truth.
+function wActiveModel() {
+  return (wModelCustomEl.value || '').trim() || 'gpt-4o-mini-transcribe-2025-12-15';
+}
+
 // Build session config in the GA nested shape.
 function wBuildSessionConfig() {
-  const transcription = { model: wModelEl.value };
+  const transcription = { model: wActiveModel() };
   if (wLangEl.value) transcription.language = wLangEl.value;
   if (wPromptEl.value.trim()) transcription.prompt = wPromptEl.value.trim();
 
@@ -1907,13 +1922,22 @@ async function wStartSession() {
 
     wStartMeter(wMicStream);
 
-    // Build WebSocket URL with model param (GA shape).
-    // Note: older beta docs used ?intent=transcription, but the GA API
-    // accepts the transcription session via session.update after connect.
-    const model = wModelEl.value;
-    const wsUrl = `wss://api.openai.com/v1/realtime?model=${encodeURIComponent(model)}`;
+    // Build WebSocket URL. Use the user-supplied URL as-is. If it lacks a
+    // model param, append the active model. This lets you test ?intent=transcription
+    // (which expects session-level model config) or ?model=… (legacy) independently.
+    const model = wActiveModel();
+    let wsUrl = (wUrlEl.value || '').trim();
+    if (!wsUrl) {
+      throw new Error('WebSocket URL is empty');
+    }
+    if (!/[?&]model=/.test(wsUrl) && !/intent=transcription/.test(wsUrl)) {
+      // append model param if URL has no model and no intent=transcription
+      // (transcription-intent sessions get the model from session.update instead)
+      wsUrl += (wsUrl.includes('?') ? '&' : '?') + 'model=' + encodeURIComponent(model);
+    }
     wSetStatus('connecting websocket…');
     wLog(`connecting to ${wsUrl}`);
+    wLog(`active model: ${model}`);
 
     // Browser WebSocket auth via subprotocol (per OpenAI docs).
     // The "openai-insecure-api-key" prefix is OpenAI's own naming — it works
@@ -1924,8 +1948,7 @@ async function wStartSession() {
     }
     wWs = new WebSocket(wsUrl, [
       'realtime',
-      'openai-insecure-api-key.' + apiKey,
-      'openai-beta.realtime-v1'
+      'openai-insecure-api-key.' + apiKey
     ]);
 
     wWs.onopen = () => {
@@ -2034,6 +2057,24 @@ function wTeardown() {
 }
 
 // Wire up
+// Preset dropdown writes into the custom model field
+wModelEl.addEventListener('change', () => {
+  if (wModelEl.value) {
+    wModelCustomEl.value = wModelEl.value;
+    wModelEl.value = ''; // reset back to "pick a preset"
+  }
+});
+
+// Persist URL and model across reloads (only if user has overridden the defaults)
+const DEFAULT_WS_URL = 'wss://api.openai.com/v1/realtime?intent=transcription';
+const DEFAULT_WS_MODEL = 'gpt-4o-mini-transcribe-2025-12-15';
+const savedUrl = localStorage.getItem('ws_url');
+if (savedUrl && savedUrl !== DEFAULT_WS_URL) wUrlEl.value = savedUrl;
+const savedModel = localStorage.getItem('ws_model');
+if (savedModel && savedModel !== DEFAULT_WS_MODEL) wModelCustomEl.value = savedModel;
+wUrlEl.addEventListener('change', () => localStorage.setItem('ws_url', wUrlEl.value.trim()));
+wModelCustomEl.addEventListener('change', () => localStorage.setItem('ws_model', wModelCustomEl.value.trim()));
+
 wStart.addEventListener('click', wStartSession);
 wEnd.addEventListener('click', wEndDictation);
 wCancel.addEventListener('click', wCancelDictation);
