@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>gpt-realtime-whisper · always-on dictation</title>
+<title>openai transcription sandbox</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -15,6 +15,7 @@
     --ink: #ecead8;
     --mute: #8a8b73;
     --accent: #c8ff4f;
+    --accent2: #7ec6ff;
     --warn: #ff7a59;
     --ok: #7be08a;
   }
@@ -29,39 +30,66 @@
     line-height: 1.55;
     background-image:
       radial-gradient(1200px 600px at 80% -10%, rgba(200,255,79,0.06), transparent 60%),
-      radial-gradient(900px 500px at -10% 110%, rgba(123,224,138,0.05), transparent 60%);
+      radial-gradient(900px 500px at -10% 110%, rgba(126,198,255,0.05), transparent 60%);
   }
   header {
     padding: 22px 24px 14px;
     border-bottom: 1px solid var(--line);
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    flex-wrap: wrap;
-    gap: 10px;
+    display: flex; justify-content: space-between; align-items: baseline;
+    flex-wrap: wrap; gap: 10px;
   }
   h1 {
     font-family: 'Fraunces', serif;
-    font-weight: 600;
-    font-size: 24px;
-    margin: 0;
+    font-weight: 600; font-size: 24px; margin: 0;
     letter-spacing: -0.02em;
   }
   h1 .dot {
-    display: inline-block;
-    width: 9px; height: 9px;
-    background: var(--accent);
-    border-radius: 50%;
-    margin-right: 9px;
-    transform: translateY(-2px);
+    display: inline-block; width: 9px; height: 9px;
+    background: var(--accent); border-radius: 50%;
+    margin-right: 9px; transform: translateY(-2px);
     box-shadow: 0 0 16px var(--accent);
   }
   .meta { color: var(--mute); font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; }
 
-  /* TOP: transcript area is the hero */
-  .top {
-    padding: 18px 22px 8px;
+  /* Tabs */
+  .tabs {
+    display: flex; gap: 0;
+    border-bottom: 1px solid var(--line);
+    overflow-x: auto;
   }
+  .tab {
+    padding: 13px 18px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--mute);
+    font-family: inherit;
+    font-size: 11.5px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all .15s;
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .mode { display: none; }
+  .mode.active { display: block; }
+
+  .top { padding: 18px 22px 8px; }
+  .bottom {
+    padding: 20px 22px 28px;
+    border-top: 1px solid var(--line);
+    background: rgba(10,11,9,0.4);
+    margin-top: 12px;
+  }
+
+  /* Status bar */
   .status-bar {
     display: flex; align-items: center; gap: 10px;
     font-size: 11px; color: var(--mute);
@@ -89,6 +117,7 @@
     transition: width .08s linear;
   }
 
+  /* Big action buttons */
   .big-actions { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
   .big-actions button {
     padding: 14px 18px; font-size: 13px; font-weight: 700;
@@ -108,38 +137,27 @@
   .big-actions .cancel:hover:not(:disabled) { background: var(--warn); color: #0d0e0c; }
   .big-actions button:disabled { opacity: 0.4; cursor: not-allowed; }
 
-  .transcript-wrap {
-    position: relative;
-    margin-bottom: 14px;
-  }
+  /* Transcript box */
+  .transcript-wrap { position: relative; margin-bottom: 14px; }
   .transcript {
     background: var(--panel); border: 1px solid var(--line);
-    padding: 28px 32px 28px 32px; overflow-y: auto;
+    padding: 28px 32px; overflow-y: auto;
     font-family: 'Fraunces', Georgia, serif;
     font-size: 19px; line-height: 1.7;
     border-radius: 2px;
-    min-height: 280px;
-    max-height: 50vh;
+    min-height: 240px; max-height: 50vh;
   }
   .transcript:empty::before {
-    content: "Press Start to begin. Speak as long as you like — pauses are fine. Press End to finalise.";
+    content: attr(data-placeholder);
     color: var(--mute); font-style: italic; font-size: 16px;
-  }
-  #modeUpload .transcript:empty::before {
-    content: "Transcription will appear here once it's ready.";
-  }
-  #modeWs .transcript:empty::before {
-    content: "Press Start to begin. Audio is sent as PCM16 over WebSocket — partial deltas will appear as the model emits them.";
   }
   .seg.partial { color: var(--mute); font-style: italic; }
   .seg.final { color: var(--ink); }
 
-  /* icon buttons floating on the transcript */
+  /* Icon buttons floating on transcript */
   .icon-bar {
-    position: absolute;
-    top: 8px; right: 8px;
-    display: flex; gap: 4px;
-    z-index: 2;
+    position: absolute; top: 8px; right: 8px;
+    display: flex; gap: 4px; z-index: 2;
   }
   .icon-btn {
     width: 32px; height: 32px;
@@ -158,7 +176,7 @@
   .icon-btn svg { width: 16px; height: 16px; }
   .icon-btn.copied { color: var(--ok); border-color: var(--ok); }
 
-  /* Confidence highlighting via logprobs */
+  /* Confidence highlighting */
   .tok { display: inline; }
   .tok.lo {
     text-decoration: underline wavy rgba(255,122,89,0.85);
@@ -170,44 +188,44 @@
     text-decoration-thickness: 1px;
     text-underline-offset: 4px;
   }
-  .tok[data-lp]:hover {
-    background: rgba(255,122,89,0.08);
-    cursor: help;
-  }
-
+  .tok[data-lp]:hover { background: rgba(255,122,89,0.08); cursor: help; }
   .conf-legend {
     margin-top: 4px;
-    font-size: 11px;
-    color: var(--mute);
+    font-size: 11px; color: var(--mute);
     display: flex; gap: 14px; flex-wrap: wrap;
   }
   .conf-legend .sw { display: inline-flex; align-items: center; gap: 6px; }
   .conf-legend .sample.lo { text-decoration: underline wavy rgba(255,122,89,0.85); text-decoration-thickness: 1.5px; text-underline-offset: 3px; color: var(--ink); }
   .conf-legend .sample.mid { text-decoration: underline dotted rgba(200,255,79,0.6); text-underline-offset: 3px; color: var(--ink); }
-  .conf-summary {
-    font-size: 11px; color: var(--mute); margin-top: 6px;
-  }
+  .conf-summary { font-size: 11px; color: var(--mute); margin-top: 6px; }
 
-  /* BOTTOM: config */
-  .bottom {
-    padding: 20px 22px 28px;
-    border-top: 1px solid var(--line);
-    background: rgba(10,11,9,0.4);
-    margin-top: 12px;
-  }
+  /* Config grid */
   .config-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 16px 18px;
   }
   @media (max-width: 700px) { .config-grid { grid-template-columns: 1fr; } }
-  fieldset { border: none; padding: 0; margin: 0; }
   legend {
     font-size: 11px; text-transform: uppercase;
     letter-spacing: 0.18em; color: var(--mute);
     margin-bottom: 10px;
-    width: 100%;
-    grid-column: 1 / -1;
+    width: 100%; grid-column: 1 / -1;
+  }
+  .config-section {
+    border: 1px solid var(--line);
+    padding: 14px 16px;
+    border-radius: 2px;
+    background: var(--panel);
+  }
+  .config-section h3 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--mute);
+    margin: 0 0 10px;
+    font-weight: 500;
+    font-family: inherit;
   }
   label { display: block; font-size: 11px; color: var(--mute); margin: 10px 0 5px; }
   input[type=text], input[type=password], select {
@@ -227,22 +245,9 @@
     cursor: pointer;
   }
   .check-row label { margin: 0; cursor: pointer; color: var(--ink); font-size: 13px; }
-  .desc { font-size: 10.5px; color: var(--mute); margin-top: 4px; margin-left: 26px; line-height: 1.45; }
-
-  .config-section {
-    border: 1px solid var(--line);
-    padding: 14px 16px;
-    border-radius: 2px;
-    background: var(--panel);
-  }
-  .config-section h3 {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.18em;
-    color: var(--mute);
-    margin: 0 0 10px;
-    font-weight: 500;
-    font-family: inherit;
+  .desc {
+    font-size: 10.5px; color: var(--mute);
+    margin-top: 4px; margin-left: 26px; line-height: 1.45;
   }
 
   details { margin-top: 10px; font-size: 12px; color: var(--mute); }
@@ -257,16 +262,22 @@
     border: 1px solid rgba(255,122,89,0.25);
     color: #ffb39a; font-size: 11px; line-height: 1.55; border-radius: 2px;
   }
+  .hint { font-size: 11px; color: var(--mute); margin-top: 6px; }
+  .hint kbd { color: var(--ink); }
 
   .panel-h {
     font-size: 11px; text-transform: uppercase; letter-spacing: 0.18em;
     color: var(--mute); margin: 14px 0 8px;
     display: flex; justify-content: space-between; align-items: center;
   }
-  .panel-h button.tiny { padding: 2px 8px; font-size: 10px; letter-spacing: 0.1em; background: transparent; color: var(--mute); border: 1px solid var(--line); cursor: pointer; border-radius: 2px; }
-
+  .panel-h .actions { display: inline-flex; gap: 6px; }
+  .panel-h button.tiny {
+    padding: 2px 8px; font-size: 10px; letter-spacing: 0.1em;
+    background: transparent; color: var(--mute);
+    border: 1px solid var(--line); cursor: pointer; border-radius: 2px;
+  }
   .log {
-    max-height: 140px; overflow-y: auto;
+    max-height: 160px; overflow-y: auto;
     background: #0a0b09; border: 1px solid var(--line);
     padding: 10px 12px; font-size: 11px; color: var(--mute); border-radius: 2px;
   }
@@ -274,9 +285,6 @@
   .log .ev .t { color: #5a5b48; margin-right: 8px; }
   .log .ev.err { color: var(--warn); }
   .log .ev.ok { color: var(--ok); }
-
-  .hint { font-size: 11px; color: var(--mute); margin-top: 6px; }
-  .hint kbd { color: var(--ink); }
 
   .keep-alive-badge {
     display: inline-flex; align-items: center; gap: 6px;
@@ -289,35 +297,7 @@
     letter-spacing: 0.05em;
   }
 
-  /* Tabs */
-  .tabs {
-    display: flex; gap: 0;
-    border-bottom: 1px solid var(--line);
-    margin: 0;
-  }
-  .tab {
-    padding: 14px 22px;
-    background: transparent;
-    border: none;
-    border-bottom: 2px solid transparent;
-    color: var(--mute);
-    font-family: inherit;
-    font-size: 12px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition: all .15s;
-    font-weight: 500;
-  }
-  .tab:hover { color: var(--ink); }
-  .tab.active {
-    color: var(--accent);
-    border-bottom-color: var(--accent);
-  }
-  .mode { display: none; }
-  .mode.active { display: block; }
-
-  /* Upload zone */
+  /* Upload-specific */
   .drop-zone {
     border: 2px dashed var(--line);
     border-radius: 4px;
@@ -332,68 +312,51 @@
     border-color: var(--accent);
     background: rgba(200,255,79,0.04);
   }
-  .drop-zone .icon {
-    width: 44px; height: 44px;
-    margin: 0 auto 14px;
-    color: var(--mute);
-  }
+  .drop-zone .icon { width: 44px; height: 44px; margin: 0 auto 14px; color: var(--mute); }
   .drop-zone:hover .icon, .drop-zone.dragging .icon { color: var(--accent); }
   .drop-zone .label {
-    font-family: 'Fraunces', serif;
-    font-size: 18px;
-    color: var(--ink);
-    margin-bottom: 6px;
+    font-family: 'Fraunces', serif; font-size: 18px;
+    color: var(--ink); margin-bottom: 6px;
   }
-  .drop-zone .formats {
-    font-size: 11px;
-    color: var(--mute);
-    margin-top: 8px;
-  }
+  .drop-zone .formats { font-size: 11px; color: var(--mute); margin-top: 8px; }
   .drop-zone input[type=file] { display: none; }
-
   .file-card {
     display: none;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 2px;
-    padding: 14px 16px;
-    margin-bottom: 14px;
-    align-items: center;
-    gap: 14px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 2px; padding: 14px 16px;
+    margin-bottom: 14px; align-items: center; gap: 14px;
   }
   .file-card.shown { display: flex; }
-  .file-card .file-icon {
-    width: 32px; height: 32px;
-    color: var(--accent);
-    flex-shrink: 0;
-  }
+  .file-card .file-icon { width: 32px; height: 32px; color: var(--accent); flex-shrink: 0; }
   .file-card .file-info { flex: 1; min-width: 0; }
-  .file-card .file-name {
-    font-size: 13px; color: var(--ink);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .file-card .file-meta {
-    font-size: 11px; color: var(--mute); margin-top: 3px;
-  }
+  .file-card .file-name { font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-card .file-meta { font-size: 11px; color: var(--mute); margin-top: 3px; }
   .file-card .remove-file {
-    background: transparent;
-    border: 1px solid var(--line);
-    color: var(--mute);
+    background: transparent; border: 1px solid var(--line); color: var(--mute);
     width: 28px; height: 28px;
     display: flex; align-items: center; justify-content: center;
-    cursor: pointer;
-    border-radius: 2px;
+    cursor: pointer; border-radius: 2px;
   }
   .file-card .remove-file:hover { color: var(--warn); border-color: var(--warn); }
-
-  /* Timing card */
+  .progress-wrap { display: none; margin-bottom: 14px; }
+  .progress-wrap.shown { display: block; }
+  .progress-bar {
+    height: 6px; background: #0a0b09;
+    border: 1px solid var(--line);
+    border-radius: 3px; overflow: hidden;
+  }
+  .progress-bar > div {
+    height: 100%; background: linear-gradient(90deg, var(--ok), var(--accent));
+    width: 0%; transition: width .2s;
+  }
+  .progress-label {
+    font-size: 11px; color: var(--mute); margin-top: 6px;
+    display: flex; justify-content: space-between;
+  }
   .timing-card {
     display: none;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 2px;
-    padding: 14px 16px;
-    margin-top: 14px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 2px; padding: 14px 16px; margin-top: 14px;
   }
   .timing-card.shown { display: block; }
   .timing-card h4 {
@@ -402,48 +365,101 @@
   }
   .timing-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
     gap: 14px;
   }
-  .timing-cell { }
   .timing-cell .val {
-    font-family: 'Fraunces', serif;
-    font-size: 22px;
-    color: var(--ink);
-    line-height: 1.1;
+    font-family: 'Fraunces', serif; font-size: 22px;
+    color: var(--ink); line-height: 1.1;
   }
   .timing-cell .lbl {
-    font-size: 10px;
-    color: var(--mute);
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    margin-top: 4px;
+    font-size: 10px; color: var(--mute);
+    text-transform: uppercase; letter-spacing: 0.1em; margin-top: 4px;
   }
 
-  /* Progress bar for upload */
-  .progress-wrap {
-    display: none;
+  /* Compare tab — stacked panes on mobile, side-by-side on wider screens */
+  .compare-panes {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
     margin-bottom: 14px;
   }
-  .progress-wrap.shown { display: block; }
-  .progress-bar {
-    height: 6px;
-    background: #0a0b09;
+  @media (min-width: 900px) {
+    .compare-panes { grid-template-columns: 1fr 1fr; }
+  }
+  .pane {
+    background: var(--panel);
     border: 1px solid var(--line);
-    border-radius: 3px;
+    border-radius: 2px;
     overflow: hidden;
   }
-  .progress-bar > div {
-    height: 100%;
-    background: linear-gradient(90deg, var(--ok), var(--accent));
-    width: 0%;
-    transition: width .2s;
+  .pane-h {
+    display: flex; align-items: center;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(10,11,9,0.6);
+    gap: 10px;
   }
-  .progress-label {
-    font-size: 11px;
-    color: var(--mute);
-    margin-top: 6px;
-    display: flex; justify-content: space-between;
+  .pane-h .name {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--ink); flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .pane-h .badge {
+    font-size: 10px; padding: 2px 7px;
+    border-radius: 10px; letter-spacing: 0.05em;
+  }
+  .pane-h .badge.whisper { background: rgba(200,255,79,0.1); border: 1px solid rgba(200,255,79,0.3); color: var(--accent); }
+  .pane-h .badge.gpt4o   { background: rgba(126,198,255,0.1); border: 1px solid rgba(126,198,255,0.3); color: var(--accent2); }
+  .pane-h .ttfb {
+    font-size: 10px; color: var(--mute);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .pane .transcript {
+    border: none; border-radius: 0;
+    min-height: 220px; max-height: 38vh;
+    margin: 0;
+  }
+  .pane .pane-actions {
+    padding: 8px 14px;
+    border-top: 1px solid var(--line);
+    display: flex; gap: 6px; justify-content: flex-end;
+    background: rgba(10,11,9,0.4);
+  }
+  .pane .pane-actions .icon-btn {
+    position: static;
+    width: 28px; height: 28px;
+  }
+  .compare-timing {
+    display: none;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+  }
+  .compare-timing.shown { display: block; }
+  .compare-timing h4 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.18em;
+    color: var(--mute); margin: 0 0 10px; font-weight: 500;
+  }
+  .compare-timing .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    align-items: baseline;
+  }
+  .compare-timing .row > div {
+    font-size: 11px; color: var(--mute);
+  }
+  .compare-timing .row .val {
+    font-family: 'Fraunces', serif;
+    font-size: 16px;
+    color: var(--ink);
+  }
+  .compare-timing .row.head > div {
+    font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--mute);
   }
 </style>
 </head>
@@ -451,278 +467,227 @@
 
 <header>
   <h1><span class="dot"></span>openai transcription sandbox</h1>
-  <div class="meta">realtime dictation · file upload · model comparison</div>
+  <div class="meta">webrtc whisper · websocket gpt-4o · file upload · side-by-side</div>
 </header>
 
 <div class="tabs">
-  <button class="tab active" data-mode="realtime" id="tabRealtime">Realtime (WebRTC)</button>
-  <button class="tab" data-mode="ws" id="tabWs">Realtime (WebSocket)</button>
-  <button class="tab" data-mode="upload" id="tabUpload">Upload file</button>
+  <button class="tab active" id="tabWhisper">gpt-realtime-whisper</button>
+  <button class="tab" id="tabMini">gpt-4o-mini-transcribe</button>
+  <button class="tab" id="tabUpload">Upload file</button>
+  <button class="tab" id="tabCompare">Compare</button>
 </div>
 
-<!-- REALTIME MODE -->
-<div class="mode active" id="modeRealtime">
-
-<!-- TOP: transcript and controls -->
-<div class="top">
-  <div class="status-bar" id="status">
-    <span class="pulse"></span>
-    <span id="statusText">idle</span>
-    <span class="keep-alive-badge" id="kaBadge" style="display:none;">keep-alive on</span>
-    <div class="meter"><div id="meterBar"></div></div>
-    <span class="timer" id="timer"></span>
-  </div>
-
-  <div class="big-actions">
-    <button id="start" class="start">Start dictation</button>
-    <button id="end" class="end" disabled>End &amp; finalise</button>
-    <button id="cancel" class="cancel" disabled>Cancel</button>
-  </div>
-
-  <div class="transcript-wrap">
-    <div class="icon-bar">
-      <button class="icon-btn" id="copyBtn" title="Copy transcript" disabled>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-        </svg>
-      </button>
-      <button class="icon-btn" id="clearBtn" title="Clear transcript" disabled>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="3 6 5 6 21 6"></polyline>
-          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
-          <path d="M10 11v6M14 11v6"></path>
-          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
-        </svg>
-      </button>
-    </div>
-    <div class="transcript" id="transcript"></div>
-  </div>
-
-  <div class="conf-legend" id="confLegend" style="display:none;">
-    <span class="sw"><span class="sample mid">word</span> some uncertainty (lp &lt; -0.5)</span>
-    <span class="sw"><span class="sample lo">word</span> low confidence (lp &lt; -1.0)</span>
-  </div>
-  <div class="conf-summary" id="confSummary"></div>
-</div>
-
-<!-- BOTTOM: configuration -->
-<div class="bottom">
-  <div class="config-grid">
-    <legend>Configuration</legend>
-
-    <div class="config-section">
-      <h3>Connection</h3>
-      <label for="key">OpenAI API key</label>
-      <input id="key" type="password" placeholder="sk-..." autocomplete="off" />
-      <details>
-        <summary>Where is this stored?</summary>
-        <p>Only in your browser's <kbd>localStorage</kbd>, never sent anywhere except api.openai.com.</p>
-        <button class="tiny" id="clearKey" type="button">Clear stored key</button>
-      </details>
-    </div>
-
-    <div class="config-section">
-      <h3>Model &amp; language</h3>
-      <label for="model">Model</label>
-      <select id="model">
-        <option value="gpt-realtime-whisper" selected>gpt-realtime-whisper · fastest, lower formatting quality</option>
-        <option value="gpt-4o-mini-transcribe">gpt-4o-mini-transcribe · balanced, good casing & punctuation</option>
-        <option value="gpt-4o-transcribe">gpt-4o-transcribe · highest accuracy, slower</option>
-      </select>
-
-      <label for="lang">Language hint</label>
-      <select id="lang">
-        <option value="">auto</option>
-        <option value="en" selected>en</option>
-        <option value="fr">fr</option>
-        <option value="de">de</option>
-        <option value="es">es</option>
-        <option value="it">it</option>
-        <option value="ur">ur</option>
-        <option value="hi">hi</option>
-        <option value="ar">ar</option>
-        <option value="pt">pt</option>
-        <option value="zh">zh</option>
-        <option value="ja">ja</option>
-      </select>
-    </div>
-
-    <div class="config-section">
-      <h3>Audio &amp; vocabulary</h3>
-      <label for="noise">Noise reduction</label>
-      <select id="noise">
-        <option value="" selected>off</option>
-        <option value="near_field">near field (phone, headset)</option>
-        <option value="far_field">far field (room, speakerphone)</option>
-      </select>
-
-      <label for="prompt">Keywords / prompt (optional)</label>
-      <input id="prompt" type="text" placeholder="metoprolol, atorvastatin, Sigma, Lexon" />
-    </div>
-
-    <div class="config-section">
-      <h3>Output</h3>
-      <div class="check-row">
-        <input type="checkbox" id="logprobs" checked />
-        <label for="logprobs">Show confidence (logprobs)</label>
-      </div>
-      <div class="desc">Underlines words the model was less sure about. Hover or tap a word to see its score.</div>
-
-      <div class="check-row">
-        <input type="checkbox" id="keepAlive" checked />
-        <label for="keepAlive">Keep connection alive during silence</label>
-      </div>
-      <div class="desc">Injects an inaudible signal + heartbeats so pauses don't disconnect. Recommended on.</div>
-    </div>
-  </div>
-
-  <div class="hint" style="margin-top: 14px;">Shortcuts: <kbd>Space</kbd> start · <kbd>Enter</kbd> end · <kbd>Esc</kbd> cancel</div>
-
-  <div class="note">
-    API key stays in this browser. Don't commit this page with a key embedded.
-  </div>
-
-  <div class="panel-h">
-    Event log
-    <span style="display: inline-flex; gap: 6px;">
-      <button class="tiny" id="copyLog" type="button">copy</button>
-      <button class="tiny" id="clearLog" type="button">clear</button>
-    </span>
-  </div>
-  <div class="log" id="log"></div>
-</div>
-</div><!-- /modeRealtime -->
-
-<!-- WEBSOCKET REALTIME MODE -->
-<div class="mode" id="modeWs">
+<!-- ============================================================
+     MODE 1: gpt-realtime-whisper (WebRTC)
+     ============================================================ -->
+<div class="mode active" id="modeWhisper">
   <div class="top">
-    <div class="status-bar" id="wStatus">
+    <div class="status-bar" id="rStatus">
       <span class="pulse"></span>
-      <span id="wStatusText">idle</span>
-      <div class="meter"><div id="wMeterBar"></div></div>
-      <span class="timer" id="wTimer"></span>
+      <span id="rStatusText">idle</span>
+      <span class="keep-alive-badge" id="rKaBadge" style="display:none;">keep-alive on</span>
+      <div class="meter"><div id="rMeterBar"></div></div>
+      <span class="timer" id="rTimer"></span>
     </div>
-
     <div class="big-actions">
-      <button id="wStart" class="start">Start dictation</button>
-      <button id="wEnd" class="end" disabled>End &amp; finalise</button>
-      <button id="wCancel" class="cancel" disabled>Cancel</button>
+      <button id="rStartBtn" class="start">Start dictation</button>
+      <button id="rEndBtn" class="end" disabled>End &amp; finalise</button>
+      <button id="rCancelBtn" class="cancel" disabled>Cancel</button>
     </div>
-
     <div class="transcript-wrap">
       <div class="icon-bar">
-        <button class="icon-btn" id="wCopyBtn" title="Copy transcript" disabled>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-          </svg>
+        <button class="icon-btn" id="rCopyBtn" title="Copy transcript" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
         </button>
-        <button class="icon-btn" id="wDownloadBtn" title="Download as .txt" disabled>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
+        <button class="icon-btn" id="rDownloadBtn" title="Download as .txt" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
         </button>
-        <button class="icon-btn" id="wClearBtn" title="Clear transcript" disabled>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="3 6 5 6 21 6"></polyline>
-            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
-            <path d="M10 11v6M14 11v6"></path>
-          </svg>
+        <button class="icon-btn" id="rClearBtn" title="Clear transcript" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6M14 11v6"></path></svg>
         </button>
       </div>
-      <div class="transcript" id="wTranscript"></div>
+      <div class="transcript" id="rTranscript" data-placeholder="Press Start. Speak as long as you like — pauses are fine with keep-alive on. Press End to finalise."></div>
     </div>
+    <div class="conf-legend" id="rConfLegend" style="display:none;">
+      <span class="sw"><span class="sample mid">word</span> some uncertainty</span>
+      <span class="sw"><span class="sample lo">word</span> low confidence</span>
+    </div>
+    <div class="conf-summary" id="rConfSummary"></div>
   </div>
 
   <div class="bottom">
     <div class="config-grid">
-      <legend>Configuration · WebSocket transport</legend>
+      <legend>Configuration · WebRTC · gpt-realtime-whisper</legend>
 
       <div class="config-section">
-        <h3>Endpoint &amp; model</h3>
-        <label for="wUrl">WebSocket URL</label>
-        <input id="wUrl" type="text" value="wss://api.openai.com/v1/realtime?intent=transcription" spellcheck="false" autocapitalize="off" autocomplete="off" />
-
-        <label for="wModelCustom">Model</label>
-        <input id="wModelCustom" type="text" value="gpt-4o-mini-transcribe-2025-12-15" spellcheck="false" autocapitalize="off" autocomplete="off" />
-
-        <label for="wModel">Quick presets</label>
-        <select id="wModel">
-          <option value="">— pick a preset —</option>
-          <option value="gpt-4o-mini-transcribe-2025-12-15">gpt-4o-mini-transcribe-2025-12-15 (latest, recommended)</option>
-          <option value="gpt-4o-mini-transcribe">gpt-4o-mini-transcribe (alias to latest)</option>
-          <option value="gpt-4o-mini-transcribe-2025-03-20">gpt-4o-mini-transcribe-2025-03-20 (older)</option>
-          <option value="gpt-4o-transcribe">gpt-4o-transcribe</option>
-          <option value="whisper-1">whisper-1</option>
-          <option value="gpt-realtime-whisper">gpt-realtime-whisper</option>
-        </select>
-        <div class="desc">Picking a preset updates the model field above. You can also type any model ID manually.</div>
-
-        <label for="wLang">Language hint</label>
-        <select id="wLang">
-          <option value="">auto-detect</option>
-          <option value="en" selected>en</option>
-          <option value="fr">fr</option>
-          <option value="de">de</option>
-          <option value="es">es</option>
-          <option value="it">it</option>
-          <option value="ur">ur</option>
-          <option value="hi">hi</option>
-          <option value="ar">ar</option>
-          <option value="pt">pt</option>
-          <option value="zh">zh</option>
-          <option value="ja">ja</option>
-        </select>
+        <h3>Connection</h3>
+        <label for="apiKey">OpenAI API key (shared across all tabs)</label>
+        <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off" />
+        <details>
+          <summary>Where is this stored?</summary>
+          <p>Only in your browser's <kbd>localStorage</kbd>, never sent anywhere except api.openai.com.</p>
+          <button class="tiny" id="clearKeyBtn" type="button">Clear stored key</button>
+        </details>
       </div>
 
       <div class="config-section">
-        <h3>Audio &amp; vocabulary</h3>
-        <label for="wNoise">Noise reduction</label>
-        <select id="wNoise">
+        <h3>Language &amp; vocabulary</h3>
+        <label for="rLang">Language hint</label>
+        <select id="rLang">
+          <option value="">auto</option>
+          <option value="en" selected>en</option>
+          <option value="fr">fr</option><option value="de">de</option>
+          <option value="es">es</option><option value="it">it</option>
+          <option value="ur">ur</option><option value="hi">hi</option>
+          <option value="ar">ar</option><option value="pt">pt</option>
+          <option value="zh">zh</option><option value="ja">ja</option>
+        </select>
+
+        <label for="rNoise">Noise reduction</label>
+        <select id="rNoise">
           <option value="" selected>off</option>
           <option value="near_field">near field (phone, headset)</option>
           <option value="far_field">far field (room, speakerphone)</option>
         </select>
 
-        <label for="wPrompt">Keywords / prompt (optional)</label>
-        <input id="wPrompt" type="text" placeholder="metoprolol, atorvastatin, Sigma, Lexon" />
+        <label for="rPrompt">Keywords / prompt (optional)</label>
+        <input id="rPrompt" type="text" placeholder="metoprolol, atorvastatin, Sigma, Lexon" />
       </div>
 
       <div class="config-section">
         <h3>Output</h3>
         <div class="check-row">
-          <input type="checkbox" id="wLogprobs" checked />
-          <label for="wLogprobs">Show confidence (logprobs)</label>
+          <input type="checkbox" id="rLogprobs" checked />
+          <label for="rLogprobs">Show confidence (logprobs)</label>
         </div>
-        <div class="desc">Underlines low-confidence words on final transcript.</div>
+        <div class="desc">Underlines low-confidence words on the final transcript.</div>
 
         <div class="check-row">
-          <input type="checkbox" id="wKeepAlive" checked />
-          <label for="wKeepAlive">Keep connection alive during silence</label>
+          <input type="checkbox" id="rKeepAlive" checked />
+          <label for="rKeepAlive">Keep connection alive during silence</label>
         </div>
-        <div class="desc">Sends inaudible carrier audio + heartbeats so long pauses don't disconnect.</div>
+        <div class="desc">Sub-audible carrier + heartbeats. Recommended on for dictation with pauses.</div>
       </div>
     </div>
 
-    <div class="note">
-      WebSocket transport — uses "openai-insecure-api-key" subprotocol, only suitable for personal testing. The WebRTC tab is the recommended path for production browser use.
-    </div>
+    <div class="hint" style="margin-top: 14px;">Shortcuts: <kbd>Space</kbd> start · <kbd>Enter</kbd> end · <kbd>Esc</kbd> cancel</div>
+    <div class="note">API key stays in this browser only. Don't host this page publicly with a key embedded.</div>
 
-    <div class="panel-h">
-      Event log
-      <span style="display: inline-flex; gap: 6px;">
-        <button class="tiny" id="wCopyLog" type="button">copy</button>
-        <button class="tiny" id="wClearLog" type="button">clear</button>
-      </span>
-    </div>
-    <div class="log" id="wLog"></div>
+    <div class="panel-h">Event log <span class="actions">
+      <button class="tiny" id="rCopyLog" type="button">copy</button>
+      <button class="tiny" id="rClearLog" type="button">clear</button>
+    </span></div>
+    <div class="log" id="rLog"></div>
   </div>
-</div><!-- /modeWs -->
+</div>
 
-<!-- UPLOAD MODE -->
+<!-- ============================================================
+     MODE 2: gpt-4o-mini-transcribe (WebSocket)
+     ============================================================ -->
+<div class="mode" id="modeMini">
+  <div class="top">
+    <div class="status-bar" id="mStatus">
+      <span class="pulse"></span>
+      <span id="mStatusText">idle</span>
+      <span class="keep-alive-badge" id="mKaBadge" style="display:none;">heartbeat on</span>
+      <div class="meter"><div id="mMeterBar"></div></div>
+      <span class="timer" id="mTimer"></span>
+    </div>
+    <div class="big-actions">
+      <button id="mStartBtn" class="start">Start dictation</button>
+      <button id="mEndBtn" class="end" disabled>End &amp; finalise</button>
+      <button id="mCancelBtn" class="cancel" disabled>Cancel</button>
+    </div>
+    <div class="transcript-wrap">
+      <div class="icon-bar">
+        <button class="icon-btn" id="mCopyBtn" title="Copy transcript" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        </button>
+        <button class="icon-btn" id="mDownloadBtn" title="Download as .txt" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        </button>
+        <button class="icon-btn" id="mClearBtn" title="Clear transcript" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6M14 11v6"></path></svg>
+        </button>
+      </div>
+      <div class="transcript" id="mTranscript" data-placeholder="Press Start. gpt-4o-mini-transcribe typically only emits the final transcript on commit, not partial deltas — that's normal."></div>
+    </div>
+    <div class="conf-legend" id="mConfLegend" style="display:none;">
+      <span class="sw"><span class="sample mid">word</span> some uncertainty</span>
+      <span class="sw"><span class="sample lo">word</span> low confidence</span>
+    </div>
+    <div class="conf-summary" id="mConfSummary"></div>
+  </div>
+
+  <div class="bottom">
+    <div class="config-grid">
+      <legend>Configuration · WebSocket · gpt-4o-mini-transcribe</legend>
+
+      <div class="config-section">
+        <h3>Endpoint &amp; model</h3>
+        <label for="mUrl">WebSocket URL</label>
+        <input id="mUrl" type="text" value="wss://api.openai.com/v1/realtime?intent=transcription" spellcheck="false" autocapitalize="off" autocomplete="off" />
+        <label for="mModel">Model</label>
+        <input id="mModel" type="text" value="gpt-4o-mini-transcribe-2025-12-15" spellcheck="false" autocapitalize="off" autocomplete="off" />
+        <div class="desc">Defaults are the working combination on the GA endpoint. Edit if OpenAI changes the spec.</div>
+      </div>
+
+      <div class="config-section">
+        <h3>Language &amp; vocabulary</h3>
+        <label for="mLang">Language hint</label>
+        <select id="mLang">
+          <option value="">auto</option>
+          <option value="en" selected>en</option>
+          <option value="fr">fr</option><option value="de">de</option>
+          <option value="es">es</option><option value="it">it</option>
+          <option value="ur">ur</option><option value="hi">hi</option>
+          <option value="ar">ar</option><option value="pt">pt</option>
+          <option value="zh">zh</option><option value="ja">ja</option>
+        </select>
+
+        <label for="mNoise">Noise reduction</label>
+        <select id="mNoise">
+          <option value="" selected>off</option>
+          <option value="near_field">near field (phone, headset)</option>
+          <option value="far_field">far field (room, speakerphone)</option>
+        </select>
+
+        <label for="mPrompt">Keywords / prompt (optional)</label>
+        <input id="mPrompt" type="text" placeholder="metoprolol, atorvastatin, Sigma, Lexon" />
+      </div>
+
+      <div class="config-section">
+        <h3>Output</h3>
+        <div class="check-row">
+          <input type="checkbox" id="mLogprobs" checked />
+          <label for="mLogprobs">Show confidence (logprobs)</label>
+        </div>
+        <div class="desc">Underlines low-confidence words on the final transcript.</div>
+
+        <div class="check-row">
+          <input type="checkbox" id="mKeepAlive" checked />
+          <label for="mKeepAlive">Heartbeat during silence</label>
+        </div>
+        <div class="desc">Sends a session ping every 20s so long pauses don't drop the WebSocket.</div>
+      </div>
+    </div>
+
+    <div class="hint" style="margin-top: 14px;">Shortcuts: <kbd>Space</kbd> start · <kbd>Enter</kbd> end · <kbd>Esc</kbd> cancel</div>
+    <div class="note">
+      WebSocket auth uses the documented but discouraged "openai-insecure-api-key" subprotocol. For production, use a server-side WebRTC proxy.
+    </div>
+
+    <div class="panel-h">Event log <span class="actions">
+      <button class="tiny" id="mCopyLog" type="button">copy</button>
+      <button class="tiny" id="mClearLog" type="button">clear</button>
+    </span></div>
+    <div class="log" id="mLog"></div>
+  </div>
+</div>
+
+<!-- ============================================================
+     MODE 3: Upload file
+     ============================================================ -->
 <div class="mode" id="modeUpload">
   <div class="top">
     <div class="status-bar" id="uStatus">
@@ -743,19 +708,14 @@
 
     <div class="file-card" id="fileCard">
       <svg class="file-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M9 18V5l12-2v13"></path>
-        <circle cx="6" cy="18" r="3"></circle>
-        <circle cx="18" cy="16" r="3"></circle>
+        <path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle>
       </svg>
       <div class="file-info">
         <div class="file-name" id="fileName"></div>
         <div class="file-meta" id="fileMeta"></div>
       </div>
       <button class="remove-file" id="removeFile" title="Remove file">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
       </button>
     </div>
 
@@ -775,27 +735,16 @@
     <div class="transcript-wrap">
       <div class="icon-bar">
         <button class="icon-btn" id="uCopyBtn" title="Copy transcript" disabled>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-          </svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
         </button>
-        <button class="icon-btn" id="uDownloadBtn" title="Download as .txt" disabled>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
+        <button class="icon-btn" id="uDownloadBtn" title="Download" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
         </button>
-        <button class="icon-btn" id="uClearBtn" title="Clear transcript" disabled>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="3 6 5 6 21 6"></polyline>
-            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
-            <path d="M10 11v6M14 11v6"></path>
-          </svg>
+        <button class="icon-btn" id="uClearBtn" title="Clear" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6M14 11v6"></path></svg>
         </button>
       </div>
-      <div class="transcript" id="uTranscript"></div>
+      <div class="transcript" id="uTranscript" data-placeholder="Transcription will appear here once it's ready."></div>
     </div>
 
     <div class="timing-card" id="timingCard">
@@ -811,31 +760,25 @@
 
   <div class="bottom">
     <div class="config-grid">
-      <legend>Configuration</legend>
-
+      <legend>Configuration · file upload</legend>
       <div class="config-section">
         <h3>Model</h3>
         <label for="uModel">Transcription model</label>
         <select id="uModel">
-          <option value="gpt-4o-transcribe" selected>gpt-4o-transcribe · best quality</option>
-          <option value="gpt-4o-mini-transcribe">gpt-4o-mini-transcribe · faster, cheaper, near-equal quality</option>
-          <option value="whisper-1">whisper-1 · older, supports timestamps &amp; subtitles</option>
+          <option value="gpt-4o-mini-transcribe-2025-12-15" selected>gpt-4o-mini-transcribe-2025-12-15 (latest, recommended)</option>
+          <option value="gpt-4o-transcribe">gpt-4o-transcribe (highest accuracy)</option>
+          <option value="whisper-1">whisper-1 (supports SRT/VTT)</option>
         </select>
 
         <label for="uLang">Language hint</label>
         <select id="uLang">
           <option value="">auto-detect</option>
           <option value="en" selected>en</option>
-          <option value="fr">fr</option>
-          <option value="de">de</option>
-          <option value="es">es</option>
-          <option value="it">it</option>
-          <option value="ur">ur</option>
-          <option value="hi">hi</option>
-          <option value="ar">ar</option>
-          <option value="pt">pt</option>
-          <option value="zh">zh</option>
-          <option value="ja">ja</option>
+          <option value="fr">fr</option><option value="de">de</option>
+          <option value="es">es</option><option value="it">it</option>
+          <option value="ur">ur</option><option value="hi">hi</option>
+          <option value="ar">ar</option><option value="pt">pt</option>
+          <option value="zh">zh</option><option value="ja">ja</option>
         </select>
       </div>
 
@@ -845,81 +788,156 @@
         <select id="uFormat">
           <option value="json" selected>plain text (json)</option>
           <option value="text">plain text</option>
-          <option value="verbose_json">verbose json (whisper-1 only — segments &amp; timestamps)</option>
+          <option value="verbose_json">verbose json (whisper-1 only)</option>
           <option value="srt">SRT subtitle (whisper-1 only)</option>
           <option value="vtt">VTT subtitle (whisper-1 only)</option>
         </select>
 
         <label for="uPrompt">Keywords / prompt (optional)</label>
         <input id="uPrompt" type="text" placeholder="metoprolol, atorvastatin, Sigma, Lexon" />
+      </div>
+    </div>
+    <div class="note">Audio is sent directly to api.openai.com — not through any other server.</div>
 
-        <div class="check-row">
-          <input type="checkbox" id="uTemperature" />
-          <label for="uTemperature">Lower temperature (more deterministic)</label>
-        </div>
-        <div class="desc">Off = normal; on sets temperature to 0 for the most consistent output.</div>
+    <div class="panel-h">Event log <span class="actions">
+      <button class="tiny" id="uCopyLog" type="button">copy</button>
+      <button class="tiny" id="uClearLog" type="button">clear</button>
+    </span></div>
+    <div class="log" id="uLog"></div>
+  </div>
+</div>
+
+<!-- ============================================================
+     MODE 4: Compare side-by-side
+     ============================================================ -->
+<div class="mode" id="modeCompare">
+  <div class="top">
+    <div class="status-bar" id="cStatus">
+      <span class="pulse"></span>
+      <span id="cStatusText">idle · press Start to dictate to both models simultaneously</span>
+      <div class="meter"><div id="cMeterBar"></div></div>
+      <span class="timer" id="cTimer"></span>
+    </div>
+    <div class="big-actions">
+      <button id="cStartBtn" class="start">Start dictation (both)</button>
+      <button id="cEndBtn" class="end" disabled>End &amp; finalise both</button>
+      <button id="cCancelBtn" class="cancel" disabled>Cancel</button>
+    </div>
+
+    <div class="compare-timing" id="compareTiming">
+      <h4>Timing &amp; output</h4>
+      <div class="row head">
+        <div></div>
+        <div>Whisper (WebRTC)</div>
+        <div>GPT-4o-mini (WebSocket)</div>
+      </div>
+      <div class="row">
+        <div>First delta</div>
+        <div><span class="val" id="ttfbWhisper">—</span></div>
+        <div><span class="val" id="ttfbMini">—</span></div>
+      </div>
+      <div class="row">
+        <div>Final received</div>
+        <div><span class="val" id="ttfWhisper">—</span></div>
+        <div><span class="val" id="ttfMini">—</span></div>
+      </div>
+      <div class="row">
+        <div>Tokens</div>
+        <div><span class="val" id="tokWhisper">—</span></div>
+        <div><span class="val" id="tokMini">—</span></div>
       </div>
     </div>
 
-    <div class="note">
-      Files are sent directly to OpenAI for transcription. Your audio doesn't pass through any other server.
-    </div>
+    <div class="compare-panes">
+      <div class="pane">
+        <div class="pane-h">
+          <span class="badge whisper">WebRTC</span>
+          <span class="name">gpt-realtime-whisper</span>
+          <span class="ttfb" id="cWhisperStatus"></span>
+        </div>
+        <div class="transcript" id="cWhisperTranscript" data-placeholder="Whisper streams partial deltas while you speak."></div>
+        <div class="pane-actions">
+          <button class="icon-btn" id="cWhisperCopy" title="Copy" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          </button>
+          <button class="icon-btn" id="cWhisperDownload" title="Download" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          </button>
+        </div>
+      </div>
 
-    <div class="panel-h">
-      Event log
-      <span style="display: inline-flex; gap: 6px;">
-        <button class="tiny" id="uCopyLog" type="button">copy</button>
-        <button class="tiny" id="uClearLog" type="button">clear</button>
-      </span>
+      <div class="pane">
+        <div class="pane-h">
+          <span class="badge gpt4o">WebSocket</span>
+          <span class="name">gpt-4o-mini-transcribe-2025-12-15</span>
+          <span class="ttfb" id="cMiniStatus"></span>
+        </div>
+        <div class="transcript" id="cMiniTranscript" data-placeholder="GPT-4o-mini typically only emits on End commit."></div>
+        <div class="pane-actions">
+          <button class="icon-btn" id="cMiniCopy" title="Copy" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          </button>
+          <button class="icon-btn" id="cMiniDownload" title="Download" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          </button>
+        </div>
+      </div>
     </div>
-    <div class="log" id="uLog"></div>
   </div>
-</div><!-- /modeUpload -->
+
+  <div class="bottom">
+    <div class="note">
+      Both panes share a single microphone. Audio is fanned out to two parallel sessions: WebRTC for gpt-realtime-whisper, WebSocket for gpt-4o-mini-transcribe. Cost is roughly doubled for the duration of dictation. Settings inherit from the individual tabs (language, prompt, noise reduction). Logprobs are forced on so both panes show confidence.
+    </div>
+
+    <div class="panel-h">Event log <span class="actions">
+      <button class="tiny" id="cCopyLog" type="button">copy</button>
+      <button class="tiny" id="cClearLog" type="button">clear</button>
+    </span></div>
+    <div class="log" id="cLog"></div>
+  </div>
+</div>
+
 <script>
+'use strict';
+
+// ============================================================
+// SHARED UTILITIES
+// ============================================================
 const $ = (id) => document.getElementById(id);
-const keyEl=$('key'), modelEl=$('model'), langEl=$('lang'), promptEl=$('prompt');
-const noiseEl=$('noise'), logprobsEl=$('logprobs'), keepAliveEl=$('keepAlive');
-const startBtn=$('start'), endBtn=$('end'), cancelBtn=$('cancel');
-const copyBtn=$('copyBtn'), clearBtn=$('clearBtn'), clearLogBtn=$('clearLog'), copyLogBtn=$('copyLog'), clearKeyBtn=$('clearKey');
-const transcriptEl=$('transcript'), logEl=$('log');
-const statusEl=$('status'), statusText=$('statusText'), timerEl=$('timer'), meterBar=$('meterBar');
-const confLegendEl=$('confLegend'), confSummaryEl=$('confSummary');
-const kaBadge=$('kaBadge');
+const apiKeyEl = $('apiKey');
+const clearKeyBtn = $('clearKeyBtn');
 
-keyEl.value = localStorage.getItem('oa_key') || '';
-keyEl.addEventListener('change', () => localStorage.setItem('oa_key', keyEl.value.trim()));
-clearKeyBtn.addEventListener('click', () => { keyEl.value=''; localStorage.removeItem('oa_key'); log('key cleared','ok'); });
+apiKeyEl.value = localStorage.getItem('oa_key') || '';
+apiKeyEl.addEventListener('change', () => localStorage.setItem('oa_key', apiKeyEl.value.trim()));
+clearKeyBtn.addEventListener('click', () => {
+  apiKeyEl.value = '';
+  localStorage.removeItem('oa_key');
+});
 
-let pc=null, dc=null, micStream=null, mixedStream=null;
-let audioCtx=null, analyser=null, meterRAF=null;
-let timerRAF=null, timerStart=0;
-let heartbeatInterval=null;
-let awaitingFinal=false;
-let partialText='';
-let finalText='';
-let finalTokens=null;
-let finalTimeout=null;
-let keepAliveNodes=null;  // { osc, gain, dest } for cleanup
+function getApiKey() {
+  const k = apiKeyEl.value.trim();
+  if (!k) { alert('Paste an OpenAI API key in the first tab.'); return null; }
+  localStorage.setItem('oa_key', k);
+  return k;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function formatMs(ms) {
+  if (ms == null) return '—';
+  if (ms < 1000) return Math.round(ms) + ' ms';
+  return (ms / 1000).toFixed(2) + ' s';
+}
+function formatBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
+  return (b / 1024 / 1024).toFixed(2) + ' MB';
+}
 
 const LP_MID = -0.5;
 const LP_LO  = -1.0;
-const HEARTBEAT_MS = 20000;  // 20s — well under any reasonable server timeout
-
-function setStatus(text, kind) {
-  statusText.textContent = text;
-  statusEl.classList.remove('live','error','processing');
-  if (kind) statusEl.classList.add(kind);
-}
-function log(msg, kind='') {
-  const div=document.createElement('div');
-  div.className='ev '+kind;
-  const ts=new Date().toLocaleTimeString('en-GB',{hour12:false});
-  div.innerHTML=`<span class="t">${ts}</span>${escapeHtml(msg)}`;
-  logEl.appendChild(div);
-  logEl.scrollTop=logEl.scrollHeight;
-}
-function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-
 function classForLp(lp) {
   if (lp == null) return '';
   if (lp < LP_LO) return 'lo';
@@ -927,842 +945,52 @@ function classForLp(lp) {
   return '';
 }
 
-function renderTranscript() {
-  transcriptEl.innerHTML='';
-  confLegendEl.style.display = 'none';
-  confSummaryEl.textContent = '';
-
-  const hasContent = !!(finalText || partialText);
-  copyBtn.disabled = !hasContent;
-  clearBtn.disabled = !hasContent;
-
-  if (finalText && finalTokens && finalTokens.length) {
-    let loCount=0, midCount=0, total=0, sum=0;
-    for (const t of finalTokens) {
-      const span = document.createElement('span');
-      span.className = 'tok ' + classForLp(t.logprob);
-      if (t.logprob != null) {
-        span.dataset.lp = t.logprob.toFixed(2);
-        span.title = `logprob: ${t.logprob.toFixed(2)}`;
-        sum += t.logprob; total++;
-        if (t.logprob < LP_LO) loCount++;
-        else if (t.logprob < LP_MID) midCount++;
-      }
-      span.textContent = t.token;
-      transcriptEl.appendChild(span);
-    }
-    confLegendEl.style.display = 'flex';
-    if (total > 0) {
-      const avg = sum/total;
-      confSummaryEl.textContent =
-        `${total} tokens · avg logprob ${avg.toFixed(2)} · ${loCount} low-confidence · ${midCount} slightly uncertain`;
-    }
-  } else if (finalText) {
-    const s=document.createElement('span'); s.className='seg final'; s.textContent=finalText;
-    transcriptEl.appendChild(s);
-  } else if (partialText) {
-    const s=document.createElement('span'); s.className='seg partial'; s.textContent=partialText;
-    transcriptEl.appendChild(s);
+// Generic logger factory — gives each tab its own log + copy + clear behaviour
+function makeLogger(logEl, copyBtn, clearBtn) {
+  function log(msg, kind = '') {
+    const div = document.createElement('div');
+    div.className = 'ev ' + kind;
+    const ts = new Date().toLocaleTimeString('en-GB', { hour12: false });
+    div.innerHTML = `<span class="t">${ts}</span>${escapeHtml(msg)}`;
+    logEl.appendChild(div);
+    logEl.scrollTop = logEl.scrollHeight;
   }
-  transcriptEl.scrollTop=transcriptEl.scrollHeight;
-}
-
-function startMeter(stream) {
-  if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-  const src=audioCtx.createMediaStreamSource(stream);
-  analyser=audioCtx.createAnalyser();
-  analyser.fftSize=512;
-  src.connect(analyser);
-  const buf=new Uint8Array(analyser.frequencyBinCount);
-  const tick=()=>{
-    analyser.getByteTimeDomainData(buf);
-    let sum=0;
-    for (let i=0;i<buf.length;i++){ const v=(buf[i]-128)/128; sum+=v*v; }
-    const rms=Math.sqrt(sum/buf.length);
-    meterBar.style.width=Math.min(100,Math.round(rms*220))+'%';
-    meterRAF=requestAnimationFrame(tick);
-  };
-  tick();
-}
-function stopMeter() {
-  if (meterRAF) cancelAnimationFrame(meterRAF);
-  meterRAF=null;
-  meterBar.style.width='0%';
-}
-function startTimer() {
-  timerStart=performance.now();
-  const tick=()=>{
-    const e=(performance.now()-timerStart)/1000;
-    const mm=String(Math.floor(e/60)).padStart(2,'0');
-    const ss=String(Math.floor(e%60)).padStart(2,'0');
-    timerEl.textContent=`${mm}:${ss}`;
-    timerRAF=requestAnimationFrame(tick);
-  };
-  tick();
-}
-function stopTimer() {
-  if (timerRAF) cancelAnimationFrame(timerRAF);
-  timerRAF=null;
-}
-
-/**
- * Build an outbound audio track that mixes:
- *  - the real microphone
- *  - a barely-audible carrier tone (very low gain) to prevent WebRTC DTX silence suppression
- *    and to keep the audio pipeline "warm" on the server side
- * Returns a MediaStream with a single mixed audio track.
- */
-function buildMixedAudioStream(mic) {
-  audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)({ sampleRate: 48000 });
-  const dest = audioCtx.createMediaStreamDestination();
-  const micSrc = audioCtx.createMediaStreamSource(mic);
-  micSrc.connect(dest);
-
-  // sub-audible carrier: 30 Hz sine at vanishing gain. Most mics/phones won't
-  // even reproduce it audibly. Its job is purely to keep packets flowing.
-  const osc = audioCtx.createOscillator();
-  osc.type = 'sine';
-  osc.frequency.value = 30;
-  const gain = audioCtx.createGain();
-  gain.gain.value = 0.0008;  // ~ -62 dBFS, inaudible but non-zero
-  osc.connect(gain).connect(dest);
-  osc.start();
-
-  keepAliveNodes = { osc, gain, dest };
-  return dest.stream;
-}
-
-function teardownKeepAlive() {
-  if (keepAliveNodes) {
-    try { keepAliveNodes.osc.stop(); } catch {}
-    try { keepAliveNodes.osc.disconnect(); } catch {}
-    try { keepAliveNodes.gain.disconnect(); } catch {}
-    keepAliveNodes = null;
-  }
-}
-
-function startHeartbeat() {
-  stopHeartbeat();
-  heartbeatInterval = setInterval(() => {
-    if (dc && dc.readyState === 'open') {
-      // a no-op session.update keeps the data channel and session warm.
-      // sending the same config is harmless.
-      try {
-        dc.send(JSON.stringify({ type: 'session.update', session: buildSessionConfig() }));
-      } catch (e) {
-        log('heartbeat send failed: '+e.message, 'err');
-      }
-    }
-  }, HEARTBEAT_MS);
-}
-function stopHeartbeat() {
-  if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
-}
-
-function handleEvent(evt) {
-  switch (evt.type) {
-    case 'session.created':
-      log('session.created', 'ok');
-      break;
-    case 'session.updated':
-      // heartbeat causes these — keep them quiet
-      break;
-    case 'conversation.item.input_audio_transcription.delta':
-      partialText += (evt.delta || '');
-      renderTranscript();
-      break;
-    case 'conversation.item.input_audio_transcription.completed':
-      // Append to anything already finalised, so multiple commits in one session work
-      const newPiece = evt.transcript || partialText;
-      if (finalText) {
-        finalText = finalText + (finalText.endsWith(' ') ? '' : ' ') + newPiece;
-      } else {
-        finalText = newPiece;
-      }
-      if (Array.isArray(evt.logprobs) && evt.logprobs.length) {
-        const newTokens = evt.logprobs.map(l => ({
-          token: l.token,
-          logprob: typeof l.logprob === 'number' ? l.logprob : null
-        }));
-        finalTokens = finalTokens ? finalTokens.concat(newTokens) : newTokens;
-      }
-      partialText = '';
-      renderTranscript();
-      log('✓ final transcript received' + (Array.isArray(evt.logprobs) ? ` (${evt.logprobs.length} tokens w/ logprobs)` : ''),'ok');
-      if (awaitingFinal) {
-        awaitingFinal=false;
-        if (finalTimeout) { clearTimeout(finalTimeout); finalTimeout=null; }
-        teardown();
-        setStatus('done');
-      }
-      break;
-    case 'conversation.item.input_audio_transcription.failed':
-      log('transcription failed: '+JSON.stringify(evt.error||{}),'err');
-      awaitingFinal=false;
-      teardown();
-      setStatus('failed','error');
-      break;
-    case 'input_audio_buffer.committed':
-      log('buffer committed','ok');
-      break;
-    case 'error':
-      log('error: '+JSON.stringify(evt.error||evt),'err');
-      break;
-  }
-}
-
-function buildSessionConfig() {
-  const model = modelEl.value;
-  const transcription = { model };
-  if (langEl.value) transcription.language = langEl.value;
-  if (promptEl.value.trim()) transcription.prompt = promptEl.value.trim();
-
-  // The GA /v1/realtime/calls endpoint requires the new nested shape
-  // for ALL transcription models — the older flat shape (input_audio_format
-  // at the session root) was rejected with "Unknown parameter" errors.
-  const input = {
-    format: { type: 'audio/pcm', rate: 24000 },
-    transcription,
-    turn_detection: null
-  };
-  if (noiseEl.value) {
-    input.noise_reduction = { type: noiseEl.value };
-  }
-  const session = {
-    type: 'transcription',
-    audio: { input }
-  };
-  if (logprobsEl.checked) {
-    session.include = ['item.input_audio_transcription.logprobs'];
-  }
-  return session;
-}
-
-async function start() {
-  const apiKey = keyEl.value.trim();
-  if (!apiKey) { alert('Paste an OpenAI API key first.'); return; }
-  localStorage.setItem('oa_key', apiKey);
-
-  partialText=''; finalText=''; finalTokens=null; awaitingFinal=false;
-  renderTranscript();
-
-  startBtn.disabled=true;
-  setStatus('requesting microphone…');
-
-  try {
-    micStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-        channelCount: 1
-      }
+  if (clearBtn) clearBtn.addEventListener('click', () => { logEl.innerHTML = ''; });
+  if (copyBtn) {
+    copyBtn.addEventListener('click', () => {
+      const lines = Array.from(logEl.querySelectorAll('.ev')).map(el => el.innerText.trim());
+      if (!lines.length) return;
+      navigator.clipboard.writeText(lines.join('\n')).then(() => {
+        const orig = copyBtn.textContent;
+        copyBtn.textContent = 'copied!';
+        setTimeout(() => { copyBtn.textContent = orig; }, 1400);
+      });
     });
-  } catch (e) {
-    setStatus('microphone denied','error');
-    log('getUserMedia failed: '+e.message,'err');
-    startBtn.disabled=false;
-    return;
   }
-
-  // Pick the outbound stream: with keep-alive on, mix in the sub-audible carrier
-  let outStream;
-  if (keepAliveEl.checked) {
-    outStream = buildMixedAudioStream(micStream);
-    mixedStream = outStream;
-    kaBadge.style.display = 'inline-flex';
-    log('keep-alive carrier engaged','ok');
-  } else {
-    outStream = micStream;
-    kaBadge.style.display = 'none';
-  }
-
-  startMeter(micStream);  // meter always reads the real mic, not the carrier
-
-  try {
-    setStatus('opening webrtc…');
-    pc = new RTCPeerConnection();
-    pc.oniceconnectionstatechange = () => {
-      log('ice: '+pc.iceConnectionState);
-      if (['failed','disconnected'].includes(pc.iceConnectionState)) {
-        setStatus('connection lost','error');
-      }
-    };
-
-    for (const t of outStream.getAudioTracks()) pc.addTrack(t, outStream);
-
-    dc = pc.createDataChannel('oai-events');
-    dc.onopen = () => {
-      log('data channel open','ok');
-      setStatus('listening — pauses are ok','live');
-      startTimer();
-      endBtn.disabled=false;
-      cancelBtn.disabled=false;
-      if (keepAliveEl.checked) startHeartbeat();
-    };
-    dc.onmessage = (e) => { try { handleEvent(JSON.parse(e.data)); } catch { log('non-json: '+e.data); } };
-    dc.onclose = () => log('data channel closed');
-    dc.onerror = () => log('data channel error','err');
-
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-
-    setStatus('handshaking with openai…');
-    const sessionCfg = buildSessionConfig();
-    log('session config: ' + JSON.stringify(sessionCfg));
-    const fd = new FormData();
-    fd.set('sdp', offer.sdp);
-    fd.set('session', JSON.stringify(sessionCfg));
-
-    const resp = await fetch('https://api.openai.com/v1/realtime/calls', {
-      method:'POST',
-      headers:{ 'Authorization':'Bearer '+apiKey },
-      body: fd
-    });
-    if (!resp.ok) {
-      const txt = await resp.text();
-      throw new Error('SDP exchange failed ('+resp.status+'): '+txt);
-    }
-    const answerSdp = await resp.text();
-    await pc.setRemoteDescription({ type:'answer', sdp:answerSdp });
-    log('remote sdp set','ok');
-  } catch (e) {
-    setStatus('connection failed','error');
-    log(e.message || String(e),'err');
-    teardown();
-    startBtn.disabled=false;
-  }
+  return log;
 }
 
-function endDictation() {
-  if (!dc || dc.readyState !== 'open') return;
-  log('→ committing buffer for final transcription');
-  awaitingFinal = true;
-  if (micStream) micStream.getAudioTracks().forEach(t => t.enabled = false);
-  dc.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
-  setStatus('finalising transcript…','processing');
-  stopTimer();
-  stopHeartbeat();
-  endBtn.disabled=true;
-  cancelBtn.disabled=true;
-  finalTimeout = setTimeout(() => {
-    if (awaitingFinal) {
-      log('no completion event after 15s — using partial','err');
-      awaitingFinal=false;
-      if (!finalText) finalText = partialText;
-      renderTranscript();
-      teardown();
-      setStatus('finished (timeout)','error');
-    }
-  }, 15000);
-}
-
-function cancelDictation() {
-  log('cancelled by user');
-  if (finalTimeout) { clearTimeout(finalTimeout); finalTimeout=null; }
-  awaitingFinal=false;
-  teardown();
-  setStatus('cancelled');
-}
-
-function teardown() {
-  stopTimer();
-  stopHeartbeat();
-  teardownKeepAlive();
-  kaBadge.style.display = 'none';
-  endBtn.disabled=true;
-  cancelBtn.disabled=true;
-  try { if (dc && dc.readyState === 'open') dc.close(); } catch {}
-  try { if (pc) pc.close(); } catch {}
-  dc=null; pc=null;
-  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream=null; }
-  if (mixedStream) { mixedStream.getTracks().forEach(t => t.stop()); mixedStream=null; }
-  if (audioCtx) { audioCtx.close().catch(()=>{}); audioCtx=null; }
-  analyser=null;
-  stopMeter();
-  startBtn.disabled=false;
-}
-
-startBtn.addEventListener('click', start);
-endBtn.addEventListener('click', endDictation);
-cancelBtn.addEventListener('click', cancelDictation);
-
-copyBtn.addEventListener('click', () => {
-  const text = finalText || partialText;
-  if (!text) return;
-  navigator.clipboard.writeText(text).then(() => {
-    copyBtn.classList.add('copied');
-    const original = copyBtn.title;
-    copyBtn.title = 'Copied!';
-    setTimeout(() => { copyBtn.classList.remove('copied'); copyBtn.title = original; }, 1400);
-    log('transcript copied','ok');
-  });
-});
-clearBtn.addEventListener('click', () => {
-  finalText=''; partialText=''; finalTokens=null;
-  renderTranscript();
-  timerEl.textContent='';
-});
-clearLogBtn.addEventListener('click', () => { logEl.innerHTML=''; });
-copyLogBtn.addEventListener('click', () => {
-  // Grab the visible text of every log entry
-  const lines = Array.from(logEl.querySelectorAll('.ev')).map(el => el.innerText.trim());
-  if (!lines.length) { return; }
-  const text = lines.join('\n');
-  navigator.clipboard.writeText(text).then(() => {
-    const orig = copyLogBtn.textContent;
-    copyLogBtn.textContent = 'copied!';
-    setTimeout(() => { copyLogBtn.textContent = orig; }, 1400);
-  }).catch(err => {
-    // fallback: select the log area so the user can copy manually
-    const range = document.createRange();
-    range.selectNodeContents(logEl);
-    const sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(range);
-  });
-});
-
-document.addEventListener('keydown', (e) => {
-  const tag = e.target.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-  if (e.code === 'Space' && !startBtn.disabled) { e.preventDefault(); start(); }
-  else if (e.code === 'Enter' && !endBtn.disabled) { e.preventDefault(); endDictation(); }
-  else if (e.code === 'Escape' && !cancelBtn.disabled) { e.preventDefault(); cancelDictation(); }
-});
-
-setStatus('idle');
-
-/* ===========================================================
-   UPLOAD MODE
-   =========================================================== */
-
-const tabRealtime = $('tabRealtime'), tabUpload = $('tabUpload'), tabWs = $('tabWs');
-const modeRealtime = $('modeRealtime'), modeUpload = $('modeUpload'), modeWs = $('modeWs');
-
-function switchTab(mode) {
-  [tabRealtime, tabUpload, tabWs].forEach(t => t.classList.remove('active'));
-  [modeRealtime, modeUpload, modeWs].forEach(m => m.classList.remove('active'));
-  if (mode === 'realtime') { tabRealtime.classList.add('active'); modeRealtime.classList.add('active'); }
-  else if (mode === 'ws')  { tabWs.classList.add('active'); modeWs.classList.add('active'); }
-  else                     { tabUpload.classList.add('active'); modeUpload.classList.add('active'); }
-}
-tabRealtime.addEventListener('click', () => switchTab('realtime'));
-tabWs.addEventListener('click', () => switchTab('ws'));
-tabUpload.addEventListener('click', () => switchTab('upload'));
-
-// upload DOM refs
-const dropZone = $('dropZone'), fileInput = $('fileInput');
-const fileCard = $('fileCard'), fileName = $('fileName'), fileMeta = $('fileMeta'), removeFile = $('removeFile');
-const transcribeBtn = $('transcribeBtn'), cancelUploadBtn = $('cancelUploadBtn');
-const uTranscriptEl = $('uTranscript');
-const uCopyBtn = $('uCopyBtn'), uDownloadBtn = $('uDownloadBtn'), uClearBtn = $('uClearBtn');
-const uStatus = $('uStatus'), uStatusText = $('uStatusText');
-const uModelEl = $('uModel'), uLangEl = $('uLang'), uFormatEl = $('uFormat'), uPromptEl = $('uPrompt'), uTempEl = $('uTemperature');
-const uLogEl = $('uLog'), uCopyLog = $('uCopyLog'), uClearLog = $('uClearLog');
-const progressWrap = $('progressWrap'), progressBar = $('progressBar'), progressText = $('progressText'), progressPct = $('progressPct');
-const timingCard = $('timingCard');
-const tFileSize = $('tFileSize'), tUploadTime = $('tUploadTime'), tServerTime = $('tServerTime'), tTotalTime = $('tTotalTime');
-
-let selectedFile = null;
-let currentXhr = null;
-let uTranscriptText = '';
-
-function uSetStatus(text, kind) {
-  uStatusText.textContent = text;
-  uStatus.classList.remove('live','error','processing');
-  if (kind) uStatus.classList.add(kind);
-}
-function uLog(msg, kind='') {
-  const div = document.createElement('div');
-  div.className = 'ev ' + kind;
-  const ts = new Date().toLocaleTimeString('en-GB',{hour12:false});
-  div.innerHTML = `<span class="t">${ts}</span>${escapeHtml(msg)}`;
-  uLogEl.appendChild(div);
-  uLogEl.scrollTop = uLogEl.scrollHeight;
-}
-
-function formatBytes(b) {
-  if (b < 1024) return b + ' B';
-  if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
-  return (b/1024/1024).toFixed(2) + ' MB';
-}
-function formatMs(ms) {
-  if (ms < 1000) return Math.round(ms) + ' ms';
-  return (ms/1000).toFixed(2) + ' s';
-}
-
-function selectFile(file) {
-  if (!file) return;
-
-  // 25 MB hard limit
-  const MAX = 25 * 1024 * 1024;
-  if (file.size > MAX) {
-    uLog(`file too large: ${formatBytes(file.size)} (max 25 MB)`, 'err');
-    uSetStatus('file too large','error');
-    return;
-  }
-
-  selectedFile = file;
-  fileName.textContent = file.name;
-  fileMeta.textContent = `${formatBytes(file.size)} · ${file.type || 'audio'}`;
-  fileCard.classList.add('shown');
-  transcribeBtn.disabled = false;
-  uSetStatus('ready to transcribe');
-  uLog(`selected: ${file.name} (${formatBytes(file.size)})`, 'ok');
-}
-
-function clearFile() {
-  selectedFile = null;
-  fileInput.value = '';
-  fileCard.classList.remove('shown');
-  transcribeBtn.disabled = true;
-  uSetStatus('drop an audio file to begin');
-}
-
-// Drop zone interactions
-dropZone.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', (e) => selectFile(e.target.files[0]));
-removeFile.addEventListener('click', clearFile);
-
-['dragenter','dragover'].forEach(ev => dropZone.addEventListener(ev, (e) => {
-  e.preventDefault(); e.stopPropagation();
-  dropZone.classList.add('dragging');
-}));
-['dragleave','drop'].forEach(ev => dropZone.addEventListener(ev, (e) => {
-  e.preventDefault(); e.stopPropagation();
-  dropZone.classList.remove('dragging');
-}));
-dropZone.addEventListener('drop', (e) => {
-  const f = e.dataTransfer.files[0];
-  if (f) selectFile(f);
-});
-
-function uRenderTranscript() {
-  uTranscriptEl.textContent = uTranscriptText;
-  const has = !!uTranscriptText;
-  uCopyBtn.disabled = !has;
-  uDownloadBtn.disabled = !has;
-  uClearBtn.disabled = !has;
-}
-
-async function transcribe() {
-  const apiKey = keyEl.value.trim();
-  if (!apiKey) { alert('Paste your OpenAI API key in the Realtime tab first.'); return; }
-  if (!selectedFile) return;
-
-  const model = uModelEl.value;
-  const lang = uLangEl.value;
-  const fmt = uFormatEl.value;
-  const prompt = uPromptEl.value.trim();
-  const lowTemp = uTempEl.checked;
-
-  // Format validation for non-whisper models
-  const isWhisper = model === 'whisper-1';
-  if (!isWhisper && (fmt === 'verbose_json' || fmt === 'srt' || fmt === 'vtt')) {
-    uLog(`format "${fmt}" is only supported by whisper-1 — falling back to json`, 'err');
-  }
-  const effectiveFmt = (!isWhisper && (fmt === 'verbose_json' || fmt === 'srt' || fmt === 'vtt')) ? 'json' : fmt;
-
-  uTranscriptText = '';
-  uRenderTranscript();
-  timingCard.classList.remove('shown');
-
-  transcribeBtn.disabled = true;
-  cancelUploadBtn.disabled = false;
-  progressWrap.classList.add('shown');
-  progressBar.style.width = '0%';
-  progressPct.textContent = '0%';
-  progressText.textContent = 'uploading…';
-  uSetStatus('uploading audio…','processing');
-
-  uLog(`transcribing ${selectedFile.name} with ${model}` + (lang ? ` (${lang})` : ''));
-
-  const fd = new FormData();
-  fd.append('file', selectedFile);
-  fd.append('model', model);
-  fd.append('response_format', effectiveFmt);
-  if (lang) fd.append('language', lang);
-  if (prompt) fd.append('prompt', prompt);
-  if (lowTemp) fd.append('temperature', '0');
-
-  const tStart = performance.now();
-  let tUploadEnd = null;
-
-  const xhr = new XMLHttpRequest();
-  currentXhr = xhr;
-
-  xhr.upload.addEventListener('progress', (e) => {
-    if (e.lengthComputable) {
-      const pct = Math.round((e.loaded / e.total) * 100);
-      progressBar.style.width = pct + '%';
-      progressPct.textContent = pct + '%';
-      if (pct >= 100) {
-        progressText.textContent = 'processing on server…';
-        if (tUploadEnd === null) tUploadEnd = performance.now();
-        uSetStatus('processing on openai…','processing');
-      }
-    }
-  });
-
-  xhr.addEventListener('load', () => {
-    const tEnd = performance.now();
-    if (tUploadEnd === null) tUploadEnd = tEnd;
-    currentXhr = null;
-    progressWrap.classList.remove('shown');
-    cancelUploadBtn.disabled = true;
-
-    if (xhr.status >= 200 && xhr.status < 300) {
-      // success — parse based on format
-      let textOut = '';
-      try {
-        if (effectiveFmt === 'json' || effectiveFmt === 'verbose_json') {
-          const obj = JSON.parse(xhr.responseText);
-          textOut = obj.text || JSON.stringify(obj, null, 2);
-        } else {
-          // text / srt / vtt are plain strings
-          textOut = xhr.responseText;
-        }
-      } catch (e) {
-        textOut = xhr.responseText;
-      }
-      uTranscriptText = textOut;
-      uRenderTranscript();
-
-      // timing
-      tFileSize.textContent = formatBytes(selectedFile.size);
-      tUploadTime.textContent = formatMs(tUploadEnd - tStart);
-      tServerTime.textContent = formatMs(tEnd - tUploadEnd);
-      tTotalTime.textContent = formatMs(tEnd - tStart);
-      timingCard.classList.add('shown');
-
-      uSetStatus('done','live');
-      uLog(`✓ transcribed in ${formatMs(tEnd - tStart)} (upload ${formatMs(tUploadEnd - tStart)}, server ${formatMs(tEnd - tUploadEnd)})`, 'ok');
-    } else {
-      uSetStatus(`failed (${xhr.status})`,'error');
-      uLog(`HTTP ${xhr.status}: ${xhr.responseText}`, 'err');
-    }
-    transcribeBtn.disabled = false;
-  });
-
-  xhr.addEventListener('error', () => {
-    currentXhr = null;
-    progressWrap.classList.remove('shown');
-    cancelUploadBtn.disabled = true;
-    transcribeBtn.disabled = false;
-    uSetStatus('network error','error');
-    uLog('network error during upload', 'err');
-  });
-
-  xhr.addEventListener('abort', () => {
-    currentXhr = null;
-    progressWrap.classList.remove('shown');
-    cancelUploadBtn.disabled = true;
-    transcribeBtn.disabled = false;
-    uSetStatus('cancelled');
-    uLog('upload cancelled', 'err');
-  });
-
-  xhr.open('POST', 'https://api.openai.com/v1/audio/transcriptions');
-  xhr.setRequestHeader('Authorization', 'Bearer ' + apiKey);
-  xhr.send(fd);
-}
-
-function cancelUpload() {
-  if (currentXhr) {
-    currentXhr.abort();
-  }
-}
-
-transcribeBtn.addEventListener('click', transcribe);
-cancelUploadBtn.addEventListener('click', cancelUpload);
-
-uCopyBtn.addEventListener('click', () => {
-  if (!uTranscriptText) return;
-  navigator.clipboard.writeText(uTranscriptText).then(() => {
-    uCopyBtn.classList.add('copied');
-    setTimeout(() => uCopyBtn.classList.remove('copied'), 1400);
-    uLog('transcript copied to clipboard','ok');
-  });
-});
-
-uDownloadBtn.addEventListener('click', () => {
-  if (!uTranscriptText) return;
-  // Pick extension based on selected format
-  const fmt = uFormatEl.value;
-  let ext = 'txt';
-  let mime = 'text/plain';
-  if (fmt === 'srt') { ext = 'srt'; mime = 'application/x-subrip'; }
-  else if (fmt === 'vtt') { ext = 'vtt'; mime = 'text/vtt'; }
-  else if (fmt === 'verbose_json') { ext = 'json'; mime = 'application/json'; }
-
-  const baseName = selectedFile ? selectedFile.name.replace(/\.[^.]+$/, '') : 'transcript';
-  const fileName = `${baseName}.${ext}`;
-  const blob = new Blob([uTranscriptText], { type: mime + ';charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-  uLog(`downloaded ${fileName}`, 'ok');
-});
-
-uClearBtn.addEventListener('click', () => {
-  uTranscriptText = '';
-  uRenderTranscript();
-  timingCard.classList.remove('shown');
-});
-
-uClearLog.addEventListener('click', () => { uLogEl.innerHTML=''; });
-uCopyLog.addEventListener('click', () => {
-  const lines = Array.from(uLogEl.querySelectorAll('.ev')).map(el => el.innerText.trim());
-  if (!lines.length) return;
-  navigator.clipboard.writeText(lines.join('\n')).then(() => {
-    const orig = uCopyLog.textContent;
-    uCopyLog.textContent = 'copied!';
-    setTimeout(() => { uCopyLog.textContent = orig; }, 1400);
-  });
-});
-
-// Show empty state on transcript
-uRenderTranscript();
-
-/* ===========================================================
-   WEBSOCKET REALTIME MODE
-   Browser → wss://api.openai.com/v1/realtime?...
-   Mic captured via getUserMedia, resampled to 24kHz PCM16
-   via AudioWorklet, base64-encoded, sent as input_audio_buffer.append.
-   =========================================================== */
-
-// DOM refs
-const wStart = $('wStart'), wEnd = $('wEnd'), wCancel = $('wCancel');
-const wCopyBtn = $('wCopyBtn'), wDownloadBtn = $('wDownloadBtn'), wClearBtn = $('wClearBtn');
-const wTranscriptEl = $('wTranscript');
-const wStatus = $('wStatus'), wStatusText = $('wStatusText'), wTimer = $('wTimer'), wMeterBar = $('wMeterBar');
-const wModelEl = $('wModel'), wModelCustomEl = $('wModelCustom'), wUrlEl = $('wUrl'), wLangEl = $('wLang'), wNoiseEl = $('wNoise'), wPromptEl = $('wPrompt'), wLogprobsEl = $('wLogprobs'), wKeepAliveEl = $('wKeepAlive');
-const wLogEl = $('wLog'), wCopyLog = $('wCopyLog'), wClearLog = $('wClearLog');
-
-let wWs = null;             // WebSocket
-let wMicStream = null;      // MediaStream
-let wAudioCtx = null;
-let wWorklet = null;        // AudioWorkletNode that emits PCM16 chunks
-let wAnalyser = null;
-let wMeterRAF = null;
-let wTimerRAF = null;
-let wTimerStart = 0;
-let wPartial = '';
-let wFinal = '';
-let wTokens = null;
-let wAwaitingFinal = false;
-let wFinalTimeout = null;
-let wHeartbeatInterval = null;
-
-function wSetStatus(text, kind) {
-  wStatusText.textContent = text;
-  wStatus.classList.remove('live','error','processing');
-  if (kind) wStatus.classList.add(kind);
-}
-function wLog(msg, kind='') {
-  const div = document.createElement('div');
-  div.className = 'ev ' + kind;
-  const ts = new Date().toLocaleTimeString('en-GB',{hour12:false});
-  div.innerHTML = `<span class="t">${ts}</span>${escapeHtml(msg)}`;
-  wLogEl.appendChild(div);
-  wLogEl.scrollTop = wLogEl.scrollHeight;
-}
-
-function wRenderTranscript() {
-  wTranscriptEl.innerHTML = '';
-  const has = !!(wFinal || wPartial);
-  wCopyBtn.disabled = !has;
-  wDownloadBtn.disabled = !has;
-  wClearBtn.disabled = !has;
-
-  if (wFinal && wTokens && wTokens.length) {
-    for (const t of wTokens) {
-      const span = document.createElement('span');
-      span.className = 'tok ' + classForLp(t.logprob);
-      if (t.logprob != null) {
-        span.dataset.lp = t.logprob.toFixed(2);
-        span.title = `logprob: ${t.logprob.toFixed(2)}`;
-      }
-      span.textContent = t.token;
-      wTranscriptEl.appendChild(span);
-    }
-  } else if (wFinal) {
-    const s = document.createElement('span'); s.className='seg final'; s.textContent=wFinal;
-    wTranscriptEl.appendChild(s);
-  } else if (wPartial) {
-    const s = document.createElement('span'); s.className='seg partial'; s.textContent=wPartial;
-    wTranscriptEl.appendChild(s);
-  }
-  wTranscriptEl.scrollTop = wTranscriptEl.scrollHeight;
-}
-
-function wStartMeter(stream) {
-  const src = wAudioCtx.createMediaStreamSource(stream);
-  wAnalyser = wAudioCtx.createAnalyser();
-  wAnalyser.fftSize = 512;
-  src.connect(wAnalyser);
-  const buf = new Uint8Array(wAnalyser.frequencyBinCount);
-  const tick = () => {
-    wAnalyser.getByteTimeDomainData(buf);
-    let sum = 0;
-    for (let i=0;i<buf.length;i++){ const v=(buf[i]-128)/128; sum+=v*v; }
-    const rms = Math.sqrt(sum/buf.length);
-    wMeterBar.style.width = Math.min(100, Math.round(rms*220)) + '%';
-    wMeterRAF = requestAnimationFrame(tick);
-  };
-  tick();
-}
-function wStopMeter() {
-  if (wMeterRAF) cancelAnimationFrame(wMeterRAF);
-  wMeterRAF = null;
-  wMeterBar.style.width = '0%';
-}
-function wStartTimer() {
-  wTimerStart = performance.now();
-  const tick = () => {
-    const e = (performance.now() - wTimerStart) / 1000;
-    const mm = String(Math.floor(e/60)).padStart(2,'0');
-    const ss = String(Math.floor(e%60)).padStart(2,'0');
-    wTimer.textContent = `${mm}:${ss}`;
-    wTimerRAF = requestAnimationFrame(tick);
-  };
-  tick();
-}
-function wStopTimer() {
-  if (wTimerRAF) cancelAnimationFrame(wTimerRAF);
-  wTimerRAF = null;
-}
-
-// AudioWorklet that resamples to 24kHz PCM16 and posts Int16Array chunks.
-// Inlined as a blob URL so we don't need a separate worklet file.
+// Audio worklet code: resamples mic to 24kHz PCM16, emits Int16Array chunks
 const WORKLET_CODE = `
 class PCMResampler extends AudioWorkletProcessor {
   constructor(opts) {
     super();
     this.targetRate = (opts && opts.processorOptions && opts.processorOptions.targetRate) || 24000;
-    this.inputRate = sampleRate; // global in worklet scope
+    this.inputRate = sampleRate;
     this.ratio = this.inputRate / this.targetRate;
     this.acc = 0;
-    this.bufferSize = 2400; // ~100ms at 24kHz
+    this.bufferSize = 2400;
     this.outBuffer = new Int16Array(this.bufferSize);
     this.outIndex = 0;
   }
   process(inputs) {
     const input = inputs[0];
     if (!input || !input[0]) return true;
-    const ch = input[0]; // mono
-    // simple linear-decimation resample (good enough for speech)
+    const ch = input[0];
     for (let i = 0; i < ch.length; i++) {
       this.acc += 1;
       if (this.acc >= this.ratio) {
         this.acc -= this.ratio;
-        // clip & convert float [-1,1] to int16
         let s = Math.max(-1, Math.min(1, ch[i]));
         this.outBuffer[this.outIndex++] = s < 0 ? s * 0x8000 : s * 0x7fff;
         if (this.outIndex >= this.bufferSize) {
@@ -1778,7 +1006,6 @@ registerProcessor('pcm-resampler', PCMResampler);
 `;
 
 function pcm16ToBase64(int16Array) {
-  // Int16Array -> Uint8Array view -> base64
   const bytes = new Uint8Array(int16Array.buffer, int16Array.byteOffset, int16Array.byteLength);
   let binary = '';
   const chunkSize = 0x8000;
@@ -1788,336 +1015,1261 @@ function pcm16ToBase64(int16Array) {
   return btoa(binary);
 }
 
-// Get the active model: custom field is the source of truth.
-function wActiveModel() {
-  return (wModelCustomEl.value || '').trim() || 'gpt-4o-mini-transcribe-2025-12-15';
+// ============================================================
+// TAB SWITCHING
+// ============================================================
+const tabs = {
+  whisper: { tab: $('tabWhisper'), mode: $('modeWhisper') },
+  mini:    { tab: $('tabMini'),    mode: $('modeMini') },
+  upload:  { tab: $('tabUpload'),  mode: $('modeUpload') },
+  compare: { tab: $('tabCompare'), mode: $('modeCompare') }
+};
+function switchTab(which) {
+  Object.values(tabs).forEach(({ tab, mode }) => {
+    tab.classList.remove('active');
+    mode.classList.remove('active');
+  });
+  tabs[which].tab.classList.add('active');
+  tabs[which].mode.classList.add('active');
+}
+Object.entries(tabs).forEach(([k, { tab }]) => tab.addEventListener('click', () => switchTab(k)));
+
+// ============================================================
+// WEBRTC SESSION (used by Whisper tab + Compare tab)
+//
+// buildWebRTCSession({ apiKey, micStream, sessionConfig, onEvent, onIce, onClose })
+//   returns { pc, dc, ready: Promise<void> }
+// ============================================================
+async function buildWebRTCSession({ apiKey, micStream, sessionConfig, onEvent, onIce, onClose }) {
+  const pc = new RTCPeerConnection();
+  pc.oniceconnectionstatechange = () => onIce && onIce(pc.iceConnectionState);
+
+  for (const t of micStream.getAudioTracks()) pc.addTrack(t, micStream);
+
+  const dc = pc.createDataChannel('oai-events');
+  dc.onmessage = (e) => {
+    try { onEvent(JSON.parse(e.data)); }
+    catch { /* ignore non-json */ }
+  };
+  if (onClose) dc.onclose = () => onClose();
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+
+  const fd = new FormData();
+  fd.set('sdp', offer.sdp);
+  fd.set('session', JSON.stringify(sessionConfig));
+
+  const resp = await fetch('https://api.openai.com/v1/realtime/calls', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + apiKey },
+    body: fd
+  });
+  if (!resp.ok) {
+    const txt = await resp.text();
+    throw new Error('WebRTC SDP exchange failed (' + resp.status + '): ' + txt);
+  }
+  const answerSdp = await resp.text();
+  await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+
+  return { pc, dc };
 }
 
-// Build session config in the GA nested shape.
-function wBuildSessionConfig() {
-  const transcription = { model: wActiveModel() };
-  if (wLangEl.value) transcription.language = wLangEl.value;
-  if (wPromptEl.value.trim()) transcription.prompt = wPromptEl.value.trim();
-
+// Build the GA-nested session config (works for gpt-realtime-whisper over WebRTC,
+// and is the same shape that worked for gpt-4o-mini-transcribe over WebSocket).
+function buildSessionConfig({ model, language, prompt, noise, logprobs }) {
+  const transcription = { model };
+  if (language) transcription.language = language;
+  if (prompt) transcription.prompt = prompt;
   const input = {
     format: { type: 'audio/pcm', rate: 24000 },
     transcription,
     turn_detection: null
   };
-  if (wNoiseEl.value) input.noise_reduction = { type: wNoiseEl.value };
-
-  const session = {
-    type: 'transcription',
-    audio: { input }
-  };
-  if (wLogprobsEl.checked) {
-    session.include = ['item.input_audio_transcription.logprobs'];
-  }
+  if (noise) input.noise_reduction = { type: noise };
+  const session = { type: 'transcription', audio: { input } };
+  if (logprobs) session.include = ['item.input_audio_transcription.logprobs'];
   return session;
 }
 
-function wStartHeartbeat() {
-  wStopHeartbeat();
-  // Send session.update every 20s — keeps the connection from going idle
-  // while also serving as a no-op handshake confirmation.
-  wHeartbeatInterval = setInterval(() => {
-    if (wWs && wWs.readyState === WebSocket.OPEN) {
-      try {
-        wWs.send(JSON.stringify({ type: 'session.update', session: wBuildSessionConfig() }));
-      } catch (e) {
-        wLog('heartbeat send failed: ' + e.message, 'err');
-      }
+// ============================================================
+// MIC + KEEP-ALIVE CARRIER
+// ============================================================
+async function captureMic() {
+  return navigator.mediaDevices.getUserMedia({
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      channelCount: 1
     }
-  }, 20000);
-}
-function wStopHeartbeat() {
-  if (wHeartbeatInterval) { clearInterval(wHeartbeatInterval); wHeartbeatInterval = null; }
+  });
 }
 
-function wHandleEvent(evt) {
-  switch (evt.type) {
-    case 'transcription_session.created':
-    case 'session.created':
-    case 'transcription_session.updated':
-    case 'session.updated':
-      wLog(evt.type, 'ok');
-      break;
-    case 'conversation.item.input_audio_transcription.delta':
-      wPartial += (evt.delta || '');
-      wRenderTranscript();
-      break;
-    case 'conversation.item.input_audio_transcription.completed': {
-      const newPiece = evt.transcript || wPartial;
-      wFinal = wFinal ? (wFinal + (wFinal.endsWith(' ') ? '' : ' ') + newPiece) : newPiece;
-      if (Array.isArray(evt.logprobs) && evt.logprobs.length) {
-        const newTokens = evt.logprobs.map(l => ({
-          token: l.token,
-          logprob: typeof l.logprob === 'number' ? l.logprob : null
-        }));
-        wTokens = wTokens ? wTokens.concat(newTokens) : newTokens;
-      }
-      wPartial = '';
-      wRenderTranscript();
-      wLog('✓ final transcript received' + (Array.isArray(evt.logprobs) ? ` (${evt.logprobs.length} tokens w/ logprobs)` : ''), 'ok');
-      if (wAwaitingFinal) {
-        wAwaitingFinal = false;
-        if (wFinalTimeout) { clearTimeout(wFinalTimeout); wFinalTimeout = null; }
-        wTeardown();
-        wSetStatus('done');
-      }
-      break;
+// Mix the mic with a sub-audible carrier to keep audio packets flowing during silence.
+// Returns { stream, cleanup, audioCtx }
+function makeMixedStream(micStream) {
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+  const dest = audioCtx.createMediaStreamDestination();
+  const micSrc = audioCtx.createMediaStreamSource(micStream);
+  micSrc.connect(dest);
+
+  const osc = audioCtx.createOscillator();
+  osc.type = 'sine';
+  osc.frequency.value = 30;
+  const gain = audioCtx.createGain();
+  gain.gain.value = 0.0008;
+  osc.connect(gain).connect(dest);
+  osc.start();
+
+  return {
+    stream: dest.stream,
+    audioCtx,
+    cleanup: () => {
+      try { osc.stop(); } catch {}
+      try { osc.disconnect(); } catch {}
+      try { gain.disconnect(); } catch {}
+      try { dest.stream.getTracks().forEach(t => t.stop()); } catch {}
     }
-    case 'conversation.item.input_audio_transcription.failed':
-      wLog('transcription failed: ' + JSON.stringify(evt.error||{}), 'err');
-      wAwaitingFinal = false;
-      wTeardown();
-      wSetStatus('failed','error');
-      break;
-    case 'input_audio_buffer.committed':
-      wLog('buffer committed', 'ok');
-      break;
-    case 'error':
-      wLog('error: ' + JSON.stringify(evt.error || evt), 'err');
-      break;
+  };
+}
+
+// Visual meter and timer helpers
+function attachMeter(stream, meterBarEl) {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const src = ctx.createMediaStreamSource(stream);
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 512;
+  src.connect(analyser);
+  const buf = new Uint8Array(analyser.frequencyBinCount);
+  let raf;
+  const tick = () => {
+    analyser.getByteTimeDomainData(buf);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
+    const rms = Math.sqrt(sum / buf.length);
+    meterBarEl.style.width = Math.min(100, Math.round(rms * 220)) + '%';
+    raf = requestAnimationFrame(tick);
+  };
+  tick();
+  return () => {
+    if (raf) cancelAnimationFrame(raf);
+    meterBarEl.style.width = '0%';
+    ctx.close().catch(() => {});
+  };
+}
+function attachTimer(timerEl) {
+  const start = performance.now();
+  let raf;
+  const tick = () => {
+    const e = (performance.now() - start) / 1000;
+    const mm = String(Math.floor(e / 60)).padStart(2, '0');
+    const ss = String(Math.floor(e % 60)).padStart(2, '0');
+    timerEl.textContent = `${mm}:${ss}`;
+    raf = requestAnimationFrame(tick);
+  };
+  tick();
+  return () => { if (raf) cancelAnimationFrame(raf); };
+}
+
+// ============================================================
+// TRANSCRIPT STATE OBJECT (shared shape for all panes)
+// ============================================================
+function makeTranscript({ transcriptEl, copyBtn, downloadBtn, clearBtn, confLegendEl, confSummaryEl, fileLabel }) {
+  let finalText = '';
+  let partialText = '';
+  let tokens = null;
+
+  function setEnabled(has) {
+    if (copyBtn) copyBtn.disabled = !has;
+    if (downloadBtn) downloadBtn.disabled = !has;
+    if (clearBtn) clearBtn.disabled = !has;
   }
-}
 
-async function wStartSession() {
-  const apiKey = keyEl.value.trim();
-  if (!apiKey) { alert('Paste your OpenAI API key in the Realtime (WebRTC) tab first.'); return; }
-  localStorage.setItem('oa_key', apiKey);
+  function render() {
+    transcriptEl.innerHTML = '';
+    if (confLegendEl) confLegendEl.style.display = 'none';
+    if (confSummaryEl) confSummaryEl.textContent = '';
 
-  wPartial = ''; wFinal = ''; wTokens = null; wAwaitingFinal = false;
-  wRenderTranscript();
+    const has = !!(finalText || partialText);
+    setEnabled(has);
 
-  wStart.disabled = true;
-  wSetStatus('requesting microphone…');
+    if (finalText && tokens && tokens.length) {
+      let lo = 0, mid = 0, total = 0, sum = 0;
+      for (const t of tokens) {
+        const span = document.createElement('span');
+        span.className = 'tok ' + classForLp(t.logprob);
+        if (t.logprob != null) {
+          span.dataset.lp = t.logprob.toFixed(2);
+          span.title = 'logprob: ' + t.logprob.toFixed(2);
+          sum += t.logprob; total++;
+          if (t.logprob < LP_LO) lo++;
+          else if (t.logprob < LP_MID) mid++;
+        }
+        span.textContent = t.token;
+        transcriptEl.appendChild(span);
+      }
+      if (confLegendEl) confLegendEl.style.display = 'flex';
+      if (confSummaryEl && total > 0) {
+        confSummaryEl.textContent = `${total} tokens · avg logprob ${(sum / total).toFixed(2)} · ${lo} low-confidence · ${mid} slightly uncertain`;
+      }
+    } else if (finalText) {
+      const s = document.createElement('span'); s.className = 'seg final'; s.textContent = finalText;
+      transcriptEl.appendChild(s);
+    } else if (partialText) {
+      const s = document.createElement('span'); s.className = 'seg partial'; s.textContent = partialText;
+      transcriptEl.appendChild(s);
+    }
+    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+  }
 
-  try {
-    wMicStream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 }
+  function appendDelta(d) {
+    partialText += d;
+    render();
+  }
+  function setFinal(text, lp) {
+    if (finalText) {
+      finalText = finalText + (finalText.endsWith(' ') ? '' : ' ') + text;
+    } else {
+      finalText = text;
+    }
+    if (Array.isArray(lp) && lp.length) {
+      const newToks = lp.map(l => ({ token: l.token, logprob: typeof l.logprob === 'number' ? l.logprob : null }));
+      tokens = tokens ? tokens.concat(newToks) : newToks;
+    }
+    partialText = '';
+    render();
+  }
+  function reset() {
+    finalText = ''; partialText = ''; tokens = null;
+    render();
+  }
+  function getText() { return finalText || partialText; }
+  function getTokens() { return tokens; }
+
+  // wire copy / download / clear
+  if (copyBtn) copyBtn.addEventListener('click', () => {
+    const text = getText();
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      copyBtn.classList.add('copied');
+      setTimeout(() => copyBtn.classList.remove('copied'), 1400);
     });
-  } catch (e) {
-    wSetStatus('microphone denied','error');
-    wLog('getUserMedia failed: ' + e.message, 'err');
-    wStart.disabled = false;
-    return;
+  });
+  if (downloadBtn) downloadBtn.addEventListener('click', () => {
+    const text = getText();
+    if (!text) return;
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const name = (fileLabel || 'transcript') + '-' + stamp + '.txt';
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+  if (clearBtn) clearBtn.addEventListener('click', () => reset());
+
+  render();
+
+  return { appendDelta, setFinal, reset, getText, getTokens, render };
+}
+
+// ============================================================
+// MODE 1: gpt-realtime-whisper (WebRTC)
+// ============================================================
+(() => {
+  const cfg = {
+    statusEl: $('rStatus'), statusText: $('rStatusText'),
+    timer: $('rTimer'), meterBar: $('rMeterBar'),
+    kaBadge: $('rKaBadge'),
+    startBtn: $('rStartBtn'), endBtn: $('rEndBtn'), cancelBtn: $('rCancelBtn'),
+    langEl: $('rLang'), noiseEl: $('rNoise'), promptEl: $('rPrompt'),
+    logprobsEl: $('rLogprobs'), keepAliveEl: $('rKeepAlive')
+  };
+
+  const log = makeLogger($('rLog'), $('rCopyLog'), $('rClearLog'));
+  const transcript = makeTranscript({
+    transcriptEl: $('rTranscript'),
+    copyBtn: $('rCopyBtn'),
+    downloadBtn: $('rDownloadBtn'),
+    clearBtn: $('rClearBtn'),
+    confLegendEl: $('rConfLegend'),
+    confSummaryEl: $('rConfSummary'),
+    fileLabel: 'whisper-dictation'
+  });
+
+  let pc = null, dc = null;
+  let micStream = null, mixedStreamObj = null;
+  let stopMeter = null, stopTimer = null;
+  let heartbeatInterval = null;
+  let awaitingFinal = false;
+  let finalTimeout = null;
+
+  function setStatus(text, kind) {
+    cfg.statusText.textContent = text;
+    cfg.statusEl.classList.remove('live', 'error', 'processing');
+    if (kind) cfg.statusEl.classList.add(kind);
   }
 
-  try {
-    wSetStatus('setting up audio pipeline…');
-    wAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    wLog(`audio context sample rate: ${wAudioCtx.sampleRate} Hz, will resample to 24000`);
-
-    // Load the worklet from an inline blob URL
-    const blob = new Blob([WORKLET_CODE], { type: 'application/javascript' });
-    const url = URL.createObjectURL(blob);
-    await wAudioCtx.audioWorklet.addModule(url);
-    URL.revokeObjectURL(url);
-
-    const src = wAudioCtx.createMediaStreamSource(wMicStream);
-    wWorklet = new AudioWorkletNode(wAudioCtx, 'pcm-resampler', { processorOptions: { targetRate: 24000 } });
-    src.connect(wWorklet);
-    // we don't connect worklet to destination — we don't want to hear ourselves
-
-    wStartMeter(wMicStream);
-
-    // Build WebSocket URL. Use the user-supplied URL as-is. If it lacks a
-    // model param, append the active model. This lets you test ?intent=transcription
-    // (which expects session-level model config) or ?model=… (legacy) independently.
-    const model = wActiveModel();
-    let wsUrl = (wUrlEl.value || '').trim();
-    if (!wsUrl) {
-      throw new Error('WebSocket URL is empty');
+  function handleEvent(evt) {
+    switch (evt.type) {
+      case 'session.created':
+        log('session.created', 'ok'); break;
+      case 'session.updated':
+        // heartbeat — quiet
+        break;
+      case 'conversation.item.input_audio_transcription.delta':
+        transcript.appendDelta(evt.delta || ''); break;
+      case 'conversation.item.input_audio_transcription.completed':
+        transcript.setFinal(evt.transcript || '', evt.logprobs);
+        log('✓ final received' + (Array.isArray(evt.logprobs) ? ` (${evt.logprobs.length} tokens)` : ''), 'ok');
+        if (awaitingFinal) {
+          awaitingFinal = false;
+          if (finalTimeout) { clearTimeout(finalTimeout); finalTimeout = null; }
+          teardown();
+          setStatus('done');
+        }
+        break;
+      case 'conversation.item.input_audio_transcription.failed':
+        log('transcription failed: ' + JSON.stringify(evt.error || {}), 'err');
+        awaitingFinal = false;
+        teardown();
+        setStatus('failed', 'error');
+        break;
+      case 'input_audio_buffer.committed':
+        log('buffer committed', 'ok'); break;
+      case 'error':
+        log('error: ' + JSON.stringify(evt.error || evt), 'err'); break;
     }
-    if (!/[?&]model=/.test(wsUrl) && !/intent=transcription/.test(wsUrl)) {
-      // append model param if URL has no model and no intent=transcription
-      // (transcription-intent sessions get the model from session.update instead)
-      wsUrl += (wsUrl.includes('?') ? '&' : '?') + 'model=' + encodeURIComponent(model);
-    }
-    wSetStatus('connecting websocket…');
-    wLog(`connecting to ${wsUrl}`);
-    wLog(`active model: ${model}`);
+  }
 
-    // Browser WebSocket auth via subprotocol (per OpenAI docs).
-    // The "openai-insecure-api-key" prefix is OpenAI's own naming — it works
-    // but exposes the key in the WS handshake. OK for personal sandbox only.
-    // The API key must not contain whitespace or non-token characters per RFC 6455.
+  function buildCfg() {
+    return buildSessionConfig({
+      model: 'gpt-realtime-whisper',
+      language: cfg.langEl.value,
+      prompt: cfg.promptEl.value.trim(),
+      noise: cfg.noiseEl.value,
+      logprobs: cfg.logprobsEl.checked
+    });
+  }
+
+  function startHeartbeat() {
+    stopHeartbeat();
+    heartbeatInterval = setInterval(() => {
+      if (dc && dc.readyState === 'open') {
+        try { dc.send(JSON.stringify({ type: 'session.update', session: buildCfg() })); }
+        catch (e) { log('heartbeat send failed: ' + e.message, 'err'); }
+      }
+    }, 20000);
+  }
+  function stopHeartbeat() {
+    if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
+  }
+
+  async function start() {
+    const apiKey = getApiKey();
+    if (!apiKey) return;
+
+    transcript.reset();
+    awaitingFinal = false;
+    cfg.startBtn.disabled = true;
+    setStatus('requesting microphone…');
+
+    try {
+      micStream = await captureMic();
+    } catch (e) {
+      setStatus('microphone denied', 'error');
+      log('getUserMedia failed: ' + e.message, 'err');
+      cfg.startBtn.disabled = false;
+      return;
+    }
+
+    let outStream;
+    if (cfg.keepAliveEl.checked) {
+      mixedStreamObj = makeMixedStream(micStream);
+      outStream = mixedStreamObj.stream;
+      cfg.kaBadge.style.display = 'inline-flex';
+      log('keep-alive carrier engaged', 'ok');
+    } else {
+      outStream = micStream;
+      cfg.kaBadge.style.display = 'none';
+    }
+
+    stopMeter = attachMeter(micStream, cfg.meterBar);
+
+    try {
+      setStatus('opening webrtc…');
+      const session = await buildWebRTCSession({
+        apiKey,
+        micStream: outStream,
+        sessionConfig: buildCfg(),
+        onEvent: handleEvent,
+        onIce: (state) => log('ice: ' + state),
+        onClose: () => log('data channel closed')
+      });
+      pc = session.pc;
+      dc = session.dc;
+      log('data channel open', 'ok');
+      setStatus('listening — press End when done', 'live');
+      stopTimer = attachTimer(cfg.timer);
+      cfg.endBtn.disabled = false;
+      cfg.cancelBtn.disabled = false;
+      if (cfg.keepAliveEl.checked) startHeartbeat();
+    } catch (e) {
+      setStatus('connection failed', 'error');
+      log(e.message || String(e), 'err');
+      teardown();
+      cfg.startBtn.disabled = false;
+    }
+  }
+
+  function endDictation() {
+    if (!dc || dc.readyState !== 'open') return;
+    log('→ committing buffer');
+    awaitingFinal = true;
+    if (micStream) micStream.getAudioTracks().forEach(t => t.enabled = false);
+    dc.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+    setStatus('finalising…', 'processing');
+    if (stopTimer) { stopTimer(); stopTimer = null; }
+    stopHeartbeat();
+    cfg.endBtn.disabled = true;
+    cfg.cancelBtn.disabled = true;
+    finalTimeout = setTimeout(() => {
+      if (awaitingFinal) {
+        log('no completion within 15s, tearing down', 'err');
+        awaitingFinal = false;
+        teardown();
+        setStatus('finished (timeout)', 'error');
+      }
+    }, 15000);
+  }
+
+  function cancel() {
+    log('cancelled by user');
+    if (finalTimeout) { clearTimeout(finalTimeout); finalTimeout = null; }
+    awaitingFinal = false;
+    teardown();
+    setStatus('cancelled');
+  }
+
+  function teardown() {
+    if (stopTimer) { stopTimer(); stopTimer = null; }
+    if (stopMeter) { stopMeter(); stopMeter = null; }
+    stopHeartbeat();
+    cfg.kaBadge.style.display = 'none';
+    cfg.endBtn.disabled = true;
+    cfg.cancelBtn.disabled = true;
+    try { if (dc && dc.readyState === 'open') dc.close(); } catch {}
+    try { if (pc) pc.close(); } catch {}
+    dc = null; pc = null;
+    if (mixedStreamObj) { mixedStreamObj.cleanup(); try { mixedStreamObj.audioCtx.close(); } catch {} mixedStreamObj = null; }
+    if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+    cfg.startBtn.disabled = false;
+  }
+
+  cfg.startBtn.addEventListener('click', start);
+  cfg.endBtn.addEventListener('click', endDictation);
+  cfg.cancelBtn.addEventListener('click', cancel);
+
+  document.addEventListener('keydown', (e) => {
+    if (!tabs.whisper.mode.classList.contains('active')) return;
+    const tag = e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (e.code === 'Space' && !cfg.startBtn.disabled) { e.preventDefault(); start(); }
+    else if (e.code === 'Enter' && !cfg.endBtn.disabled) { e.preventDefault(); endDictation(); }
+    else if (e.code === 'Escape' && !cfg.cancelBtn.disabled) { e.preventDefault(); cancel(); }
+  });
+
+  setStatus('idle');
+})();
+
+// ============================================================
+// MODE 2: gpt-4o-mini-transcribe (WebSocket)
+// ============================================================
+(() => {
+  const cfg = {
+    statusEl: $('mStatus'), statusText: $('mStatusText'),
+    timer: $('mTimer'), meterBar: $('mMeterBar'),
+    kaBadge: $('mKaBadge'),
+    startBtn: $('mStartBtn'), endBtn: $('mEndBtn'), cancelBtn: $('mCancelBtn'),
+    urlEl: $('mUrl'), modelEl: $('mModel'),
+    langEl: $('mLang'), noiseEl: $('mNoise'), promptEl: $('mPrompt'),
+    logprobsEl: $('mLogprobs'), keepAliveEl: $('mKeepAlive')
+  };
+
+  const log = makeLogger($('mLog'), $('mCopyLog'), $('mClearLog'));
+  const transcript = makeTranscript({
+    transcriptEl: $('mTranscript'),
+    copyBtn: $('mCopyBtn'),
+    downloadBtn: $('mDownloadBtn'),
+    clearBtn: $('mClearBtn'),
+    confLegendEl: $('mConfLegend'),
+    confSummaryEl: $('mConfSummary'),
+    fileLabel: 'gpt4o-mini-dictation'
+  });
+
+  // Persist URL and model fields
+  const D_URL = 'wss://api.openai.com/v1/realtime?intent=transcription';
+  const D_MODEL = 'gpt-4o-mini-transcribe-2025-12-15';
+  const sU = localStorage.getItem('m_url');
+  if (sU && sU !== D_URL) cfg.urlEl.value = sU;
+  const sM = localStorage.getItem('m_model');
+  if (sM && sM !== D_MODEL) cfg.modelEl.value = sM;
+  cfg.urlEl.addEventListener('change', () => localStorage.setItem('m_url', cfg.urlEl.value.trim()));
+  cfg.modelEl.addEventListener('change', () => localStorage.setItem('m_model', cfg.modelEl.value.trim()));
+
+  let ws = null;
+  let micStream = null, audioCtx = null, worklet = null;
+  let stopMeter = null, stopTimer = null;
+  let heartbeatInterval = null;
+  let awaitingFinal = false;
+  let finalTimeout = null;
+
+  function setStatus(text, kind) {
+    cfg.statusText.textContent = text;
+    cfg.statusEl.classList.remove('live', 'error', 'processing');
+    if (kind) cfg.statusEl.classList.add(kind);
+  }
+
+  function activeModel() {
+    return (cfg.modelEl.value || '').trim() || D_MODEL;
+  }
+  function buildCfg() {
+    return buildSessionConfig({
+      model: activeModel(),
+      language: cfg.langEl.value,
+      prompt: cfg.promptEl.value.trim(),
+      noise: cfg.noiseEl.value,
+      logprobs: cfg.logprobsEl.checked
+    });
+  }
+
+  function handleEvent(evt) {
+    switch (evt.type) {
+      case 'session.created':
+      case 'transcription_session.created':
+        log(evt.type, 'ok'); break;
+      case 'session.updated':
+      case 'transcription_session.updated':
+        break;
+      case 'conversation.item.input_audio_transcription.delta':
+        transcript.appendDelta(evt.delta || ''); break;
+      case 'conversation.item.input_audio_transcription.completed':
+        transcript.setFinal(evt.transcript || '', evt.logprobs);
+        log('✓ final received' + (Array.isArray(evt.logprobs) ? ` (${evt.logprobs.length} tokens)` : ''), 'ok');
+        if (awaitingFinal) {
+          awaitingFinal = false;
+          if (finalTimeout) { clearTimeout(finalTimeout); finalTimeout = null; }
+          teardown();
+          setStatus('done');
+        }
+        break;
+      case 'conversation.item.input_audio_transcription.failed':
+        log('transcription failed: ' + JSON.stringify(evt.error || {}), 'err');
+        awaitingFinal = false;
+        teardown();
+        setStatus('failed', 'error');
+        break;
+      case 'input_audio_buffer.committed':
+        log('buffer committed', 'ok'); break;
+      case 'error':
+        log('error: ' + JSON.stringify(evt.error || evt), 'err'); break;
+    }
+  }
+
+  function startHeartbeat() {
+    stopHeartbeat();
+    heartbeatInterval = setInterval(() => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        try { ws.send(JSON.stringify({ type: 'session.update', session: buildCfg() })); }
+        catch (e) { log('heartbeat send failed: ' + e.message, 'err'); }
+      }
+    }, 20000);
+  }
+  function stopHeartbeat() {
+    if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
+  }
+
+  async function start() {
+    const apiKey = getApiKey();
+    if (!apiKey) return;
     if (/[\s,;]/.test(apiKey)) {
-      throw new Error('API key contains invalid characters for WebSocket subprotocol auth');
+      alert('API key contains characters that aren\'t valid for the WebSocket subprotocol auth.');
+      return;
     }
-    wWs = new WebSocket(wsUrl, [
-      'realtime',
-      'openai-insecure-api-key.' + apiKey
-    ]);
 
-    wWs.onopen = () => {
-      wLog('websocket open', 'ok');
-      wSetStatus('listening — press End when done','live');
+    transcript.reset();
+    awaitingFinal = false;
+    cfg.startBtn.disabled = true;
+    setStatus('requesting microphone…');
 
-      // Send session config
-      const cfg = wBuildSessionConfig();
-      wLog('session config: ' + JSON.stringify(cfg));
-      wWs.send(JSON.stringify({ type: 'session.update', session: cfg }));
+    try {
+      micStream = await captureMic();
+    } catch (e) {
+      setStatus('microphone denied', 'error');
+      log('getUserMedia failed: ' + e.message, 'err');
+      cfg.startBtn.disabled = false;
+      return;
+    }
 
-      // Start forwarding PCM16 chunks
-      wWorklet.port.onmessage = (e) => {
-        if (!wWs || wWs.readyState !== WebSocket.OPEN) return;
-        const int16 = e.data;
-        const b64 = pcm16ToBase64(int16);
-        wWs.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
+    try {
+      setStatus('setting up audio pipeline…');
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      log(`audio context sample rate: ${audioCtx.sampleRate} Hz, will resample to 24000`);
+
+      const blob = new Blob([WORKLET_CODE], { type: 'application/javascript' });
+      const url = URL.createObjectURL(blob);
+      await audioCtx.audioWorklet.addModule(url);
+      URL.revokeObjectURL(url);
+
+      const src = audioCtx.createMediaStreamSource(micStream);
+      worklet = new AudioWorkletNode(audioCtx, 'pcm-resampler', { processorOptions: { targetRate: 24000 } });
+      src.connect(worklet);
+
+      stopMeter = attachMeter(micStream, cfg.meterBar);
+
+      // Construct URL
+      let wsUrl = (cfg.urlEl.value || '').trim() || D_URL;
+      const model = activeModel();
+      if (!/[?&]model=/.test(wsUrl) && !/intent=transcription/.test(wsUrl)) {
+        wsUrl += (wsUrl.includes('?') ? '&' : '?') + 'model=' + encodeURIComponent(model);
+      }
+      setStatus('connecting websocket…');
+      log('connecting to ' + wsUrl);
+      log('active model: ' + model);
+
+      ws = new WebSocket(wsUrl, ['realtime', 'openai-insecure-api-key.' + apiKey]);
+
+      ws.onopen = () => {
+        log('websocket open', 'ok');
+        setStatus('listening — press End when done', 'live');
+        const sessionCfg = buildCfg();
+        log('session config: ' + JSON.stringify(sessionCfg));
+        ws.send(JSON.stringify({ type: 'session.update', session: sessionCfg }));
+
+        worklet.port.onmessage = (e) => {
+          if (!ws || ws.readyState !== WebSocket.OPEN) return;
+          const b64 = pcm16ToBase64(e.data);
+          ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
+        };
+
+        stopTimer = attachTimer(cfg.timer);
+        cfg.endBtn.disabled = false;
+        cfg.cancelBtn.disabled = false;
+        if (cfg.keepAliveEl.checked) {
+          startHeartbeat();
+          cfg.kaBadge.style.display = 'inline-flex';
+        }
+      };
+      ws.onmessage = (e) => {
+        try { handleEvent(JSON.parse(e.data)); }
+        catch { log('non-json: ' + e.data); }
+      };
+      ws.onerror = () => log('websocket error', 'err');
+      ws.onclose = (e) => {
+        log(`websocket closed (${e.code}${e.reason ? ': ' + e.reason : ''})`);
+        if (awaitingFinal) {
+          awaitingFinal = false;
+          teardown();
+          setStatus('closed before final', 'error');
+        }
+      };
+    } catch (e) {
+      setStatus('setup failed', 'error');
+      log(e.message || String(e), 'err');
+      teardown();
+      cfg.startBtn.disabled = false;
+    }
+  }
+
+  function endDictation() {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    log('→ committing buffer');
+    awaitingFinal = true;
+    if (worklet) worklet.port.onmessage = null;
+    ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+    setStatus('finalising…', 'processing');
+    if (stopTimer) { stopTimer(); stopTimer = null; }
+    stopHeartbeat();
+    cfg.endBtn.disabled = true;
+    cfg.cancelBtn.disabled = true;
+    finalTimeout = setTimeout(() => {
+      if (awaitingFinal) {
+        log('no completion within 15s', 'err');
+        awaitingFinal = false;
+        teardown();
+        setStatus('finished (timeout)', 'error');
+      }
+    }, 15000);
+  }
+
+  function cancel() {
+    log('cancelled by user');
+    if (finalTimeout) { clearTimeout(finalTimeout); finalTimeout = null; }
+    awaitingFinal = false;
+    teardown();
+    setStatus('cancelled');
+  }
+
+  function teardown() {
+    if (stopTimer) { stopTimer(); stopTimer = null; }
+    if (stopMeter) { stopMeter(); stopMeter = null; }
+    stopHeartbeat();
+    cfg.kaBadge.style.display = 'none';
+    cfg.endBtn.disabled = true;
+    cfg.cancelBtn.disabled = true;
+    try { if (ws && ws.readyState === WebSocket.OPEN) ws.close(); } catch {}
+    ws = null;
+    if (worklet) {
+      try { worklet.port.onmessage = null; } catch {}
+      try { worklet.disconnect(); } catch {}
+      worklet = null;
+    }
+    if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+    if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }
+    cfg.startBtn.disabled = false;
+  }
+
+  cfg.startBtn.addEventListener('click', start);
+  cfg.endBtn.addEventListener('click', endDictation);
+  cfg.cancelBtn.addEventListener('click', cancel);
+
+  document.addEventListener('keydown', (e) => {
+    if (!tabs.mini.mode.classList.contains('active')) return;
+    const tag = e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (e.code === 'Space' && !cfg.startBtn.disabled) { e.preventDefault(); start(); }
+    else if (e.code === 'Enter' && !cfg.endBtn.disabled) { e.preventDefault(); endDictation(); }
+    else if (e.code === 'Escape' && !cfg.cancelBtn.disabled) { e.preventDefault(); cancel(); }
+  });
+
+  setStatus('idle');
+})();
+
+// ============================================================
+// MODE 3: File upload
+// ============================================================
+(() => {
+  const cfg = {
+    statusEl: $('uStatus'), statusText: $('uStatusText'),
+    dropZone: $('dropZone'), fileInput: $('fileInput'),
+    fileCard: $('fileCard'), fileName: $('fileName'), fileMeta: $('fileMeta'),
+    removeFile: $('removeFile'),
+    transcribeBtn: $('transcribeBtn'), cancelUploadBtn: $('cancelUploadBtn'),
+    progressWrap: $('progressWrap'), progressBar: $('progressBar'),
+    progressText: $('progressText'), progressPct: $('progressPct'),
+    timingCard: $('timingCard'),
+    tFileSize: $('tFileSize'), tUploadTime: $('tUploadTime'),
+    tServerTime: $('tServerTime'), tTotalTime: $('tTotalTime'),
+    modelEl: $('uModel'), langEl: $('uLang'),
+    formatEl: $('uFormat'), promptEl: $('uPrompt')
+  };
+
+  const log = makeLogger($('uLog'), $('uCopyLog'), $('uClearLog'));
+  const transcript = makeTranscript({
+    transcriptEl: $('uTranscript'),
+    copyBtn: $('uCopyBtn'),
+    downloadBtn: $('uDownloadBtn'),
+    clearBtn: $('uClearBtn'),
+    fileLabel: 'upload'
+  });
+
+  let selectedFile = null;
+  let currentXhr = null;
+
+  function setStatus(text, kind) {
+    cfg.statusText.textContent = text;
+    cfg.statusEl.classList.remove('live', 'error', 'processing');
+    if (kind) cfg.statusEl.classList.add(kind);
+  }
+
+  function selectFile(file) {
+    if (!file) return;
+    const MAX = 25 * 1024 * 1024;
+    if (file.size > MAX) {
+      log(`file too large: ${formatBytes(file.size)} (max 25 MB)`, 'err');
+      setStatus('file too large', 'error');
+      return;
+    }
+    selectedFile = file;
+    cfg.fileName.textContent = file.name;
+    cfg.fileMeta.textContent = `${formatBytes(file.size)} · ${file.type || 'audio'}`;
+    cfg.fileCard.classList.add('shown');
+    cfg.transcribeBtn.disabled = false;
+    setStatus('ready to transcribe');
+    log(`selected: ${file.name} (${formatBytes(file.size)})`, 'ok');
+  }
+  function clearFile() {
+    selectedFile = null;
+    cfg.fileInput.value = '';
+    cfg.fileCard.classList.remove('shown');
+    cfg.transcribeBtn.disabled = true;
+    setStatus('drop an audio file to begin');
+  }
+
+  cfg.dropZone.addEventListener('click', () => cfg.fileInput.click());
+  cfg.fileInput.addEventListener('change', (e) => selectFile(e.target.files[0]));
+  cfg.removeFile.addEventListener('click', clearFile);
+  ['dragenter', 'dragover'].forEach(ev => cfg.dropZone.addEventListener(ev, (e) => {
+    e.preventDefault(); e.stopPropagation();
+    cfg.dropZone.classList.add('dragging');
+  }));
+  ['dragleave', 'drop'].forEach(ev => cfg.dropZone.addEventListener(ev, (e) => {
+    e.preventDefault(); e.stopPropagation();
+    cfg.dropZone.classList.remove('dragging');
+  }));
+  cfg.dropZone.addEventListener('drop', (e) => {
+    const f = e.dataTransfer.files[0];
+    if (f) selectFile(f);
+  });
+
+  function transcribe() {
+    const apiKey = getApiKey();
+    if (!apiKey || !selectedFile) return;
+
+    const model = cfg.modelEl.value;
+    const lang = cfg.langEl.value;
+    const fmt = cfg.formatEl.value;
+    const prompt = cfg.promptEl.value.trim();
+
+    const isWhisper = model === 'whisper-1';
+    if (!isWhisper && (fmt === 'verbose_json' || fmt === 'srt' || fmt === 'vtt')) {
+      log(`format "${fmt}" is only supported by whisper-1 — falling back to json`, 'err');
+    }
+    const effectiveFmt = (!isWhisper && (fmt === 'verbose_json' || fmt === 'srt' || fmt === 'vtt')) ? 'json' : fmt;
+
+    transcript.reset();
+    cfg.timingCard.classList.remove('shown');
+
+    cfg.transcribeBtn.disabled = true;
+    cfg.cancelUploadBtn.disabled = false;
+    cfg.progressWrap.classList.add('shown');
+    cfg.progressBar.style.width = '0%';
+    cfg.progressPct.textContent = '0%';
+    cfg.progressText.textContent = 'uploading…';
+    setStatus('uploading audio…', 'processing');
+    log(`transcribing ${selectedFile.name} with ${model}` + (lang ? ` (${lang})` : ''));
+
+    const fd = new FormData();
+    fd.append('file', selectedFile);
+    fd.append('model', model);
+    fd.append('response_format', effectiveFmt);
+    if (lang) fd.append('language', lang);
+    if (prompt) fd.append('prompt', prompt);
+
+    const tStart = performance.now();
+    let tUploadEnd = null;
+    const xhr = new XMLHttpRequest();
+    currentXhr = xhr;
+
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable) {
+        const pct = Math.round((e.loaded / e.total) * 100);
+        cfg.progressBar.style.width = pct + '%';
+        cfg.progressPct.textContent = pct + '%';
+        if (pct >= 100 && tUploadEnd === null) {
+          cfg.progressText.textContent = 'processing on server…';
+          tUploadEnd = performance.now();
+          setStatus('processing on openai…', 'processing');
+        }
+      }
+    });
+
+    xhr.addEventListener('load', () => {
+      const tEnd = performance.now();
+      if (tUploadEnd === null) tUploadEnd = tEnd;
+      currentXhr = null;
+      cfg.progressWrap.classList.remove('shown');
+      cfg.cancelUploadBtn.disabled = true;
+
+      if (xhr.status >= 200 && xhr.status < 300) {
+        let textOut = '';
+        try {
+          if (effectiveFmt === 'json' || effectiveFmt === 'verbose_json') {
+            const obj = JSON.parse(xhr.responseText);
+            textOut = obj.text || JSON.stringify(obj, null, 2);
+          } else {
+            textOut = xhr.responseText;
+          }
+        } catch {
+          textOut = xhr.responseText;
+        }
+        transcript.setFinal(textOut, null);
+
+        cfg.tFileSize.textContent = formatBytes(selectedFile.size);
+        cfg.tUploadTime.textContent = formatMs(tUploadEnd - tStart);
+        cfg.tServerTime.textContent = formatMs(tEnd - tUploadEnd);
+        cfg.tTotalTime.textContent = formatMs(tEnd - tStart);
+        cfg.timingCard.classList.add('shown');
+
+        setStatus('done', 'live');
+        log(`✓ transcribed in ${formatMs(tEnd - tStart)} (upload ${formatMs(tUploadEnd - tStart)}, server ${formatMs(tEnd - tUploadEnd)})`, 'ok');
+      } else {
+        setStatus(`failed (${xhr.status})`, 'error');
+        log(`HTTP ${xhr.status}: ${xhr.responseText}`, 'err');
+      }
+      cfg.transcribeBtn.disabled = false;
+    });
+
+    xhr.addEventListener('error', () => {
+      currentXhr = null;
+      cfg.progressWrap.classList.remove('shown');
+      cfg.cancelUploadBtn.disabled = true;
+      cfg.transcribeBtn.disabled = false;
+      setStatus('network error', 'error');
+      log('network error during upload', 'err');
+    });
+
+    xhr.addEventListener('abort', () => {
+      currentXhr = null;
+      cfg.progressWrap.classList.remove('shown');
+      cfg.cancelUploadBtn.disabled = true;
+      cfg.transcribeBtn.disabled = false;
+      setStatus('cancelled');
+      log('upload cancelled', 'err');
+    });
+
+    xhr.open('POST', 'https://api.openai.com/v1/audio/transcriptions');
+    xhr.setRequestHeader('Authorization', 'Bearer ' + apiKey);
+    xhr.send(fd);
+  }
+
+  cfg.transcribeBtn.addEventListener('click', transcribe);
+  cfg.cancelUploadBtn.addEventListener('click', () => { if (currentXhr) currentXhr.abort(); });
+})();
+
+// ============================================================
+// MODE 4: Compare side-by-side
+// ============================================================
+(() => {
+  const cfg = {
+    statusEl: $('cStatus'), statusText: $('cStatusText'),
+    timer: $('cTimer'), meterBar: $('cMeterBar'),
+    startBtn: $('cStartBtn'), endBtn: $('cEndBtn'), cancelBtn: $('cCancelBtn'),
+    whisperStatus: $('cWhisperStatus'), miniStatus: $('cMiniStatus'),
+    compareTiming: $('compareTiming'),
+    ttfbWhisper: $('ttfbWhisper'), ttfbMini: $('ttfbMini'),
+    ttfWhisper: $('ttfWhisper'), ttfMini: $('ttfMini'),
+    tokWhisper: $('tokWhisper'), tokMini: $('tokMini')
+  };
+
+  const log = makeLogger($('cLog'), $('cCopyLog'), $('cClearLog'));
+
+  const whisperTranscript = makeTranscript({
+    transcriptEl: $('cWhisperTranscript'),
+    copyBtn: $('cWhisperCopy'),
+    downloadBtn: $('cWhisperDownload'),
+    clearBtn: null,
+    fileLabel: 'whisper-compare'
+  });
+  const miniTranscript = makeTranscript({
+    transcriptEl: $('cMiniTranscript'),
+    copyBtn: $('cMiniCopy'),
+    downloadBtn: $('cMiniDownload'),
+    clearBtn: null,
+    fileLabel: 'gpt4o-mini-compare'
+  });
+
+  let micStream = null;
+  let stopMeter = null, stopTimer = null;
+  let mixedStreamObj = null;
+  // Whisper (WebRTC)
+  let pc = null, dc = null;
+  // Mini (WebSocket)
+  let ws = null, audioCtx = null, worklet = null;
+
+  let startTs = 0;
+  let whisperFirstDelta = null, whisperFinalAt = null;
+  let miniFirstDelta = null, miniFinalAt = null;
+  let whisperAwaitingFinal = false, miniAwaitingFinal = false;
+  let finalTimeout = null;
+
+  function setStatus(text, kind) {
+    cfg.statusText.textContent = text;
+    cfg.statusEl.classList.remove('live', 'error', 'processing');
+    if (kind) cfg.statusEl.classList.add(kind);
+  }
+
+  function updateTimingDisplay() {
+    if (whisperFirstDelta != null) cfg.ttfbWhisper.textContent = formatMs(whisperFirstDelta - startTs);
+    if (whisperFinalAt != null) {
+      cfg.ttfWhisper.textContent = formatMs(whisperFinalAt - startTs);
+      const tok = whisperTranscript.getTokens();
+      cfg.tokWhisper.textContent = tok ? tok.length : '—';
+    }
+    if (miniFirstDelta != null) cfg.ttfbMini.textContent = formatMs(miniFirstDelta - startTs);
+    if (miniFinalAt != null) {
+      cfg.ttfMini.textContent = formatMs(miniFinalAt - startTs);
+      const tok = miniTranscript.getTokens();
+      cfg.tokMini.textContent = tok ? tok.length : '—';
+    }
+  }
+
+  function checkBothFinished() {
+    if (!whisperAwaitingFinal && !miniAwaitingFinal) {
+      if (finalTimeout) { clearTimeout(finalTimeout); finalTimeout = null; }
+      teardown();
+      setStatus('done');
+    }
+  }
+
+  function handleWhisperEvent(evt) {
+    switch (evt.type) {
+      case 'session.created':
+        cfg.whisperStatus.textContent = 'connected';
+        log('[whisper] session.created', 'ok'); break;
+      case 'conversation.item.input_audio_transcription.delta':
+        if (whisperFirstDelta == null) {
+          whisperFirstDelta = performance.now();
+          cfg.whisperStatus.textContent = 'streaming…';
+          updateTimingDisplay();
+        }
+        whisperTranscript.appendDelta(evt.delta || '');
+        break;
+      case 'conversation.item.input_audio_transcription.completed':
+        whisperFinalAt = performance.now();
+        whisperTranscript.setFinal(evt.transcript || '', evt.logprobs);
+        cfg.whisperStatus.textContent = 'done';
+        updateTimingDisplay();
+        log('[whisper] ✓ final', 'ok');
+        if (whisperAwaitingFinal) { whisperAwaitingFinal = false; checkBothFinished(); }
+        break;
+      case 'conversation.item.input_audio_transcription.failed':
+        log('[whisper] failed: ' + JSON.stringify(evt.error || {}), 'err');
+        whisperAwaitingFinal = false;
+        cfg.whisperStatus.textContent = 'failed';
+        checkBothFinished();
+        break;
+      case 'error':
+        log('[whisper] error: ' + JSON.stringify(evt.error || evt), 'err'); break;
+    }
+  }
+
+  function handleMiniEvent(evt) {
+    switch (evt.type) {
+      case 'session.created':
+      case 'transcription_session.created':
+        cfg.miniStatus.textContent = 'connected';
+        log('[mini] ' + evt.type, 'ok'); break;
+      case 'conversation.item.input_audio_transcription.delta':
+        if (miniFirstDelta == null) {
+          miniFirstDelta = performance.now();
+          cfg.miniStatus.textContent = 'streaming…';
+          updateTimingDisplay();
+        }
+        miniTranscript.appendDelta(evt.delta || '');
+        break;
+      case 'conversation.item.input_audio_transcription.completed':
+        miniFinalAt = performance.now();
+        miniTranscript.setFinal(evt.transcript || '', evt.logprobs);
+        cfg.miniStatus.textContent = 'done';
+        updateTimingDisplay();
+        log('[mini] ✓ final', 'ok');
+        if (miniAwaitingFinal) { miniAwaitingFinal = false; checkBothFinished(); }
+        break;
+      case 'conversation.item.input_audio_transcription.failed':
+        log('[mini] failed: ' + JSON.stringify(evt.error || {}), 'err');
+        miniAwaitingFinal = false;
+        cfg.miniStatus.textContent = 'failed';
+        checkBothFinished();
+        break;
+      case 'error':
+        log('[mini] error: ' + JSON.stringify(evt.error || evt), 'err'); break;
+    }
+  }
+
+  function whisperCfg() {
+    return buildSessionConfig({
+      model: 'gpt-realtime-whisper',
+      language: $('rLang').value,
+      prompt: $('rPrompt').value.trim(),
+      noise: $('rNoise').value,
+      logprobs: true
+    });
+  }
+  function miniCfg() {
+    return buildSessionConfig({
+      model: ($('mModel').value || '').trim() || 'gpt-4o-mini-transcribe-2025-12-15',
+      language: $('mLang').value,
+      prompt: $('mPrompt').value.trim(),
+      noise: $('mNoise').value,
+      logprobs: true
+    });
+  }
+
+  async function start() {
+    const apiKey = getApiKey();
+    if (!apiKey) return;
+    if (/[\s,;]/.test(apiKey)) {
+      alert('API key contains characters that aren\'t valid for the WebSocket subprotocol auth.');
+      return;
+    }
+
+    whisperTranscript.reset();
+    miniTranscript.reset();
+    whisperFirstDelta = null; whisperFinalAt = null;
+    miniFirstDelta = null; miniFinalAt = null;
+    cfg.ttfbWhisper.textContent = '—'; cfg.ttfWhisper.textContent = '—'; cfg.tokWhisper.textContent = '—';
+    cfg.ttfbMini.textContent = '—'; cfg.ttfMini.textContent = '—'; cfg.tokMini.textContent = '—';
+    cfg.whisperStatus.textContent = ''; cfg.miniStatus.textContent = '';
+    cfg.compareTiming.classList.add('shown');
+
+    cfg.startBtn.disabled = true;
+    setStatus('requesting microphone…');
+
+    try {
+      micStream = await captureMic();
+    } catch (e) {
+      setStatus('microphone denied', 'error');
+      log('getUserMedia failed: ' + e.message, 'err');
+      cfg.startBtn.disabled = false;
+      return;
+    }
+
+    stopMeter = attachMeter(micStream, cfg.meterBar);
+
+    try {
+      setStatus('connecting both sessions…');
+      startTs = performance.now();
+
+      // 1. Open WebRTC session for Whisper, using the mixed (keep-alive) stream
+      mixedStreamObj = makeMixedStream(micStream);
+      const whisperSession = await buildWebRTCSession({
+        apiKey,
+        micStream: mixedStreamObj.stream,
+        sessionConfig: whisperCfg(),
+        onEvent: handleWhisperEvent,
+        onIce: (state) => log('[whisper] ice: ' + state),
+        onClose: () => log('[whisper] dc closed')
+      });
+      pc = whisperSession.pc;
+      dc = whisperSession.dc;
+      log('[whisper] data channel open', 'ok');
+
+      // 2. Set up audio worklet for PCM16 → WebSocket
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      log(`[mini] audio context: ${audioCtx.sampleRate} Hz → 24000`);
+      const blob = new Blob([WORKLET_CODE], { type: 'application/javascript' });
+      const url = URL.createObjectURL(blob);
+      await audioCtx.audioWorklet.addModule(url);
+      URL.revokeObjectURL(url);
+      const src = audioCtx.createMediaStreamSource(micStream);
+      worklet = new AudioWorkletNode(audioCtx, 'pcm-resampler', { processorOptions: { targetRate: 24000 } });
+      src.connect(worklet);
+
+      // 3. Open WebSocket for Mini
+      let wsUrl = ($('mUrl').value || '').trim() || 'wss://api.openai.com/v1/realtime?intent=transcription';
+      const model = miniCfg().audio.input.transcription.model;
+      if (!/[?&]model=/.test(wsUrl) && !/intent=transcription/.test(wsUrl)) {
+        wsUrl += (wsUrl.includes('?') ? '&' : '?') + 'model=' + encodeURIComponent(model);
+      }
+      log('[mini] connecting to ' + wsUrl);
+      log('[mini] active model: ' + model);
+
+      ws = new WebSocket(wsUrl, ['realtime', 'openai-insecure-api-key.' + apiKey]);
+      ws.onopen = () => {
+        log('[mini] websocket open', 'ok');
+        ws.send(JSON.stringify({ type: 'session.update', session: miniCfg() }));
+        worklet.port.onmessage = (e) => {
+          if (!ws || ws.readyState !== WebSocket.OPEN) return;
+          ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: pcm16ToBase64(e.data) }));
+        };
+      };
+      ws.onmessage = (e) => {
+        try { handleMiniEvent(JSON.parse(e.data)); }
+        catch { log('[mini] non-json: ' + e.data); }
+      };
+      ws.onerror = () => log('[mini] websocket error', 'err');
+      ws.onclose = (evt) => {
+        log(`[mini] ws closed (${evt.code})`);
+        if (miniAwaitingFinal) {
+          miniAwaitingFinal = false;
+          cfg.miniStatus.textContent = 'closed';
+          checkBothFinished();
+        }
       };
 
-      wStartTimer();
-      wEnd.disabled = false;
-      wCancel.disabled = false;
-      if (wKeepAliveEl.checked) {
-        wStartHeartbeat();
-        wLog('keep-alive heartbeat engaged','ok');
-      }
-    };
-
-    wWs.onmessage = (e) => {
-      try { wHandleEvent(JSON.parse(e.data)); }
-      catch { wLog('non-json: ' + e.data); }
-    };
-
-    wWs.onerror = (e) => {
-      wLog('websocket error', 'err');
-    };
-
-    wWs.onclose = (e) => {
-      wLog(`websocket closed (${e.code}${e.reason ? ': ' + e.reason : ''})`);
-      if (wAwaitingFinal) {
-        // closed before final arrived
-        wAwaitingFinal = false;
-        if (!wFinal) wFinal = wPartial;
-        wRenderTranscript();
-        wTeardown();
-        wSetStatus('closed before final','error');
-      }
-    };
-  } catch (e) {
-    wSetStatus('setup failed','error');
-    wLog((e.message || String(e)), 'err');
-    wTeardown();
-    wStart.disabled = false;
-  }
-}
-
-function wEndDictation() {
-  if (!wWs || wWs.readyState !== WebSocket.OPEN) return;
-  wLog('→ committing buffer for final transcription');
-  wAwaitingFinal = true;
-  // disconnect the worklet so no more audio flows
-  if (wWorklet) wWorklet.port.onmessage = null;
-  wWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
-  wSetStatus('finalising…','processing');
-  wStopTimer();
-  wStopHeartbeat();
-  wEnd.disabled = true;
-  wCancel.disabled = true;
-  wFinalTimeout = setTimeout(() => {
-    if (wAwaitingFinal) {
-      wLog('no completion event after 15s — using partial', 'err');
-      wAwaitingFinal = false;
-      if (!wFinal) wFinal = wPartial;
-      wRenderTranscript();
-      wTeardown();
-      wSetStatus('finished (timeout)','error');
+      setStatus('listening on both — press End', 'live');
+      stopTimer = attachTimer(cfg.timer);
+      cfg.endBtn.disabled = false;
+      cfg.cancelBtn.disabled = false;
+    } catch (e) {
+      setStatus('connection failed', 'error');
+      log(e.message || String(e), 'err');
+      teardown();
+      cfg.startBtn.disabled = false;
     }
-  }, 15000);
-}
-
-function wCancelDictation() {
-  wLog('cancelled by user');
-  if (wFinalTimeout) { clearTimeout(wFinalTimeout); wFinalTimeout = null; }
-  wAwaitingFinal = false;
-  wTeardown();
-  wSetStatus('cancelled');
-}
-
-function wTeardown() {
-  wStopTimer();
-  wStopMeter();
-  wStopHeartbeat();
-  wEnd.disabled = true;
-  wCancel.disabled = true;
-  try { if (wWs && wWs.readyState === WebSocket.OPEN) wWs.close(); } catch {}
-  wWs = null;
-  if (wWorklet) {
-    try { wWorklet.port.onmessage = null; } catch {}
-    try { wWorklet.disconnect(); } catch {}
-    wWorklet = null;
   }
-  if (wMicStream) { wMicStream.getTracks().forEach(t => t.stop()); wMicStream = null; }
-  if (wAudioCtx) { wAudioCtx.close().catch(()=>{}); wAudioCtx = null; }
-  wAnalyser = null;
-  wStart.disabled = false;
-}
 
-// Wire up
-// Preset dropdown writes into the custom model field
-wModelEl.addEventListener('change', () => {
-  if (wModelEl.value) {
-    wModelCustomEl.value = wModelEl.value;
-    wModelEl.value = ''; // reset back to "pick a preset"
+  function endDictation() {
+    log('→ committing both buffers');
+    setStatus('finalising both…', 'processing');
+    if (stopTimer) { stopTimer(); stopTimer = null; }
+    cfg.endBtn.disabled = true;
+    cfg.cancelBtn.disabled = true;
+
+    if (micStream) micStream.getAudioTracks().forEach(t => t.enabled = false);
+
+    // Commit Whisper
+    if (dc && dc.readyState === 'open') {
+      whisperAwaitingFinal = true;
+      dc.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+    }
+    // Commit Mini
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      miniAwaitingFinal = true;
+      if (worklet) worklet.port.onmessage = null;
+      ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+    }
+
+    finalTimeout = setTimeout(() => {
+      if (whisperAwaitingFinal || miniAwaitingFinal) {
+        log('one or both finals timed out after 15s', 'err');
+        whisperAwaitingFinal = false;
+        miniAwaitingFinal = false;
+        teardown();
+        setStatus('finished (timeout)', 'error');
+      }
+    }, 15000);
   }
-});
 
-// Persist URL and model across reloads (only if user has overridden the defaults)
-const DEFAULT_WS_URL = 'wss://api.openai.com/v1/realtime?intent=transcription';
-const DEFAULT_WS_MODEL = 'gpt-4o-mini-transcribe-2025-12-15';
-const savedUrl = localStorage.getItem('ws_url');
-if (savedUrl && savedUrl !== DEFAULT_WS_URL) wUrlEl.value = savedUrl;
-const savedModel = localStorage.getItem('ws_model');
-if (savedModel && savedModel !== DEFAULT_WS_MODEL) wModelCustomEl.value = savedModel;
-wUrlEl.addEventListener('change', () => localStorage.setItem('ws_url', wUrlEl.value.trim()));
-wModelCustomEl.addEventListener('change', () => localStorage.setItem('ws_model', wModelCustomEl.value.trim()));
+  function cancel() {
+    log('cancelled by user');
+    if (finalTimeout) { clearTimeout(finalTimeout); finalTimeout = null; }
+    whisperAwaitingFinal = false;
+    miniAwaitingFinal = false;
+    teardown();
+    setStatus('cancelled');
+  }
 
-wStart.addEventListener('click', wStartSession);
-wEnd.addEventListener('click', wEndDictation);
-wCancel.addEventListener('click', wCancelDictation);
+  function teardown() {
+    if (stopTimer) { stopTimer(); stopTimer = null; }
+    if (stopMeter) { stopMeter(); stopMeter = null; }
+    cfg.endBtn.disabled = true;
+    cfg.cancelBtn.disabled = true;
+    try { if (dc && dc.readyState === 'open') dc.close(); } catch {}
+    try { if (pc) pc.close(); } catch {}
+    dc = null; pc = null;
+    try { if (ws && ws.readyState === WebSocket.OPEN) ws.close(); } catch {}
+    ws = null;
+    if (worklet) {
+      try { worklet.port.onmessage = null; } catch {}
+      try { worklet.disconnect(); } catch {}
+      worklet = null;
+    }
+    if (mixedStreamObj) { mixedStreamObj.cleanup(); try { mixedStreamObj.audioCtx.close(); } catch {} mixedStreamObj = null; }
+    if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+    if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }
+    cfg.startBtn.disabled = false;
+  }
 
-wCopyBtn.addEventListener('click', () => {
-  const text = wFinal || wPartial;
-  if (!text) return;
-  navigator.clipboard.writeText(text).then(() => {
-    wCopyBtn.classList.add('copied');
-    setTimeout(() => wCopyBtn.classList.remove('copied'), 1400);
-    wLog('transcript copied','ok');
-  });
-});
-wDownloadBtn.addEventListener('click', () => {
-  const text = wFinal || wPartial;
-  if (!text) return;
-  const stamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
-  const fileName = `dictation-ws-${stamp}.txt`;
-  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = fileName;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-  wLog(`downloaded ${fileName}`, 'ok');
-});
-wClearBtn.addEventListener('click', () => {
-  wFinal = ''; wPartial = ''; wTokens = null;
-  wRenderTranscript();
-  wTimer.textContent = '';
-});
-wClearLog.addEventListener('click', () => { wLogEl.innerHTML = ''; });
-wCopyLog.addEventListener('click', () => {
-  const lines = Array.from(wLogEl.querySelectorAll('.ev')).map(el => el.innerText.trim());
-  if (!lines.length) return;
-  navigator.clipboard.writeText(lines.join('\n')).then(() => {
-    const orig = wCopyLog.textContent;
-    wCopyLog.textContent = 'copied!';
-    setTimeout(() => { wCopyLog.textContent = orig; }, 1400);
-  });
-});
+  cfg.startBtn.addEventListener('click', start);
+  cfg.endBtn.addEventListener('click', endDictation);
+  cfg.cancelBtn.addEventListener('click', cancel);
 
-wRenderTranscript();
+  setStatus('idle');
+})();
 </script>
 </body>
 </html>
